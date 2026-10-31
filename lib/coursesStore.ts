@@ -7,6 +7,8 @@ export interface Course {
   course_id: string;
   price: number;
   selling_price: number;
+  uk_price: number;
+  uk_selling_price: number;
   title: string;
   sub_heading?: string | null;
   description?: string | null;
@@ -72,6 +74,8 @@ export async function getCourses(searchQuery?: string): Promise<{ data: Course[]
       ...c,
       price: Number(c.price || 0),
       selling_price: Number(c.selling_price || 0),
+      uk_price: Number(c.uk_price || 0),
+      uk_selling_price: Number(c.uk_selling_price || 0),
       duration: Number(c.duration || 0),
       course_learnings: Array.isArray(c.course_learnings) ? c.course_learnings : [],
       course_includes: Array.isArray(c.course_includes) ? c.course_includes : [],
@@ -112,6 +116,8 @@ export async function getCourseById(identifier: string): Promise<{ data: Course 
       ...data,
       price: Number(data.price || 0),
       selling_price: Number(data.selling_price || 0),
+      uk_price: Number(data.uk_price || 0),
+      uk_selling_price: Number(data.uk_selling_price || 0),
       duration: Number(data.duration || 0),
       course_learnings: Array.isArray(data.course_learnings) ? data.course_learnings : [],
       course_includes: Array.isArray(data.course_includes) ? data.course_includes : [],
@@ -174,6 +180,8 @@ export async function createCourse(
           description: courseInput.description || null,
           price: Number(courseInput.price || 0),
           selling_price: Number(courseInput.selling_price || 0),
+          uk_price: Number(courseInput.uk_price || 0),
+          uk_selling_price: Number(courseInput.uk_selling_price || 0),
           duration: Number(courseInput.duration || 0),
           mentor_id: courseInput.mentor_id || null,
           preview_media_id: courseInput.preview_media_id || null,
@@ -212,6 +220,8 @@ export async function updateCourse(
     if (courseUpdates.description !== undefined) updatePayload.description = courseUpdates.description || null;
     if (courseUpdates.price !== undefined) updatePayload.price = Number(courseUpdates.price);
     if (courseUpdates.selling_price !== undefined) updatePayload.selling_price = Number(courseUpdates.selling_price);
+    if (courseUpdates.uk_price !== undefined) updatePayload.uk_price = Number(courseUpdates.uk_price);
+    if (courseUpdates.uk_selling_price !== undefined) updatePayload.uk_selling_price = Number(courseUpdates.uk_selling_price);
     if (courseUpdates.duration !== undefined) updatePayload.duration = Number(courseUpdates.duration);
     if (courseUpdates.mentor_id !== undefined) updatePayload.mentor_id = courseUpdates.mentor_id || null;
     if (courseUpdates.preview_media_id !== undefined) updatePayload.preview_media_id = courseUpdates.preview_media_id || null;
@@ -570,6 +580,88 @@ export async function deleteCourseModuleContent(contentId: string): Promise<{ er
       return { error: new Error(error.message) };
     }
 
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
+/**
+ * Update an existing course module.
+ */
+export async function updateCourseModule(
+  moduleId: string,
+  updates: Partial<{ title: string; display_order: number; is_preview: boolean }>
+): Promise<{ data: CourseModule | null; error: Error | null }> {
+  try {
+    const payload: Record<string, unknown> = {};
+    if (updates.title !== undefined) payload.title = updates.title.trim();
+    if (updates.display_order !== undefined) payload.display_order = Number(updates.display_order);
+    if (updates.is_preview !== undefined) payload.is_preview = Boolean(updates.is_preview);
+
+    const { data, error } = await supabase
+      .from('course_modules')
+      .update(payload)
+      .eq('id', moduleId)
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: data as CourseModule, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
+/**
+ * Update an existing course module content item.
+ */
+export async function updateCourseModuleContent(
+  contentId: string,
+  updates: Partial<{ emoji?: string | null; content?: string; is_preview?: boolean }>
+): Promise<{ data: CourseModuleContent | null; error: Error | null }> {
+  try {
+    const payload: Record<string, unknown> = {};
+    if (updates.emoji !== undefined) payload.emoji = updates.emoji ? updates.emoji.trim() : null;
+    if (updates.content !== undefined) payload.content = updates.content.trim();
+    if (updates.is_preview !== undefined) payload.is_preview = Boolean(updates.is_preview);
+
+    const { data, error } = await supabase
+      .from('course_module_content')
+      .update(payload)
+      .eq('id', contentId)
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: data as CourseModuleContent, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
+/**
+ * Batch update display orders for multiple course modules.
+ */
+export async function updateModulesOrder(
+  moduleOrders: { id: string; display_order: number }[]
+): Promise<{ error: Error | null }> {
+  try {
+    for (const item of moduleOrders) {
+      const { error } = await supabase
+        .from('course_modules')
+        .update({ display_order: item.display_order })
+        .eq('id', item.id);
+      if (error) {
+        return { error: new Error(error.message) };
+      }
+    }
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err : new Error(String(err)) };

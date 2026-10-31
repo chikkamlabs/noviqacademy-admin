@@ -24,6 +24,8 @@ export default function AddCoursePage() {
   const [description, setDescription] = useState<string>('');
   const [price, setPrice] = useState<number>(0);
   const [sellingPrice, setSellingPrice] = useState<number>(0);
+  const [ukPrice, setUkPrice] = useState<number>(0);
+  const [ukSellingPrice, setUkSellingPrice] = useState<number>(0);
   const [duration, setDuration] = useState<number>(30);
   const [mentorId, setMentorId] = useState<string>('');
   const [previewMediaId, setPreviewMediaId] = useState<string>('');
@@ -88,7 +90,7 @@ export default function AddCoursePage() {
       return;
     }
 
-    if (price < 0 || sellingPrice < 0) {
+    if (price < 0 || sellingPrice < 0 || ukPrice < 0 || ukSellingPrice < 0) {
       setErrorMessage('Prices cannot be negative numbers.');
       return;
     }
@@ -102,6 +104,8 @@ export default function AddCoursePage() {
       description: description.trim() || null,
       price: Number(price),
       selling_price: Number(sellingPrice),
+      uk_price: Number(ukPrice),
+      uk_selling_price: Number(ukSellingPrice),
       duration: Number(duration),
       mentor_id: mentorId || null,
       preview_media_id: previewMediaId.trim() || null,
@@ -263,6 +267,38 @@ export default function AddCoursePage() {
                       min={0}
                       value={sellingPrice}
                       onChange={(e) => setSellingPrice(Number(e.target.value))}
+                      className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
+                    />
+                  </div>
+
+                  {/* UK Price */}
+                  <div className="form-group mb-0">
+                    <label htmlFor="ukPrice" className="form-label mb-1">
+                      UK Original Price (£) (uk_price)
+                    </label>
+                    <input
+                      id="ukPrice"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={ukPrice}
+                      onChange={(e) => setUkPrice(Number(e.target.value))}
+                      className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
+                    />
+                  </div>
+
+                  {/* UK Selling Price */}
+                  <div className="form-group mb-0">
+                    <label htmlFor="ukSellingPrice" className="form-label mb-1">
+                      UK Selling Price (£) (uk_selling_price)
+                    </label>
+                    <input
+                      id="ukSellingPrice"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={ukSellingPrice}
+                      onChange={(e) => setUkSellingPrice(Number(e.target.value))}
                       className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
                     />
                   </div>

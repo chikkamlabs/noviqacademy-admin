@@ -4,6 +4,7 @@ export interface CouponCode {
   id: string;
   code: string;
   discount_value: number;
+  uk_discount_value: number;
   valid_till?: string | null;
   count: number;
   thersold: number; // Matches database column 'thersold'
@@ -15,6 +16,7 @@ export interface CouponCode {
 export interface CreateCouponInput {
   code: string;
   discount_value: number;
+  uk_discount_value?: number;
   valid_till?: string | null;
   thersold: number;
   is_public: boolean;
@@ -23,6 +25,7 @@ export interface CreateCouponInput {
 export interface UpdateCouponInput {
   code?: string;
   discount_value?: number;
+  uk_discount_value?: number;
   valid_till?: string | null;
   count?: number;
   thersold?: number;
@@ -121,6 +124,7 @@ export async function getCoupons(
       id: c.id,
       code: c.code,
       discount_value: Number(c.discount_value || 0),
+      uk_discount_value: Number(c.uk_discount_value || 0),
       valid_till: c.valid_till || null,
       count: Number(c.count || 0),
       thersold: Number(c.thersold || 0),
@@ -165,6 +169,7 @@ export async function getCouponById(
       id: data.id,
       code: data.code,
       discount_value: Number(data.discount_value || 0),
+      uk_discount_value: Number(data.uk_discount_value || 0),
       valid_till: data.valid_till || null,
       count: Number(data.count || 0),
       thersold: Number(data.thersold || 0),
@@ -194,6 +199,7 @@ export async function createCoupon(
         {
           code: cleanedCode,
           discount_value: Number(input.discount_value || 0),
+          uk_discount_value: Number(input.uk_discount_value || 0),
           valid_till: input.valid_till || null,
           count: 0,
           thersold: Number(input.thersold || 0),
@@ -211,6 +217,7 @@ export async function createCoupon(
       id: data.id,
       code: data.code,
       discount_value: Number(data.discount_value || 0),
+      uk_discount_value: Number(data.uk_discount_value || 0),
       valid_till: data.valid_till || null,
       count: Number(data.count || 0),
       thersold: Number(data.thersold || 0),
@@ -239,6 +246,7 @@ export async function updateCoupon(
 
     if (updates.code !== undefined) payload.code = updates.code.trim().toUpperCase();
     if (updates.discount_value !== undefined) payload.discount_value = Number(updates.discount_value || 0);
+    if (updates.uk_discount_value !== undefined) payload.uk_discount_value = Number(updates.uk_discount_value || 0);
     if (updates.valid_till !== undefined) payload.valid_till = updates.valid_till || null;
     if (updates.count !== undefined) payload.count = Number(updates.count || 0);
     if (updates.thersold !== undefined) payload.thersold = Number(updates.thersold || 0);
@@ -259,6 +267,7 @@ export async function updateCoupon(
       id: data.id,
       code: data.code,
       discount_value: Number(data.discount_value || 0),
+      uk_discount_value: Number(data.uk_discount_value || 0),
       valid_till: data.valid_till || null,
       count: Number(data.count || 0),
       thersold: Number(data.thersold || 0),

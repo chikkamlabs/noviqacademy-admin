@@ -24,6 +24,9 @@ function CouponEditForm({
 }: CouponEditFormProps) {
   const [code, setCode] = useState<string>(coupon.code);
   const [discountValue, setDiscountValue] = useState<number | ''>(coupon.discount_value);
+  const [ukDiscountValue, setUkDiscountValue] = useState<number | ''>(
+    coupon.uk_discount_value != null ? coupon.uk_discount_value : ''
+  );
   const [validTill, setValidTill] = useState<string>(
     coupon.valid_till
       ? new Date(coupon.valid_till).toISOString().slice(0, 16)
@@ -52,7 +55,12 @@ function CouponEditForm({
     }
 
     if (discountValue === '' || Number(discountValue) < 0) {
-      setErrorMessage('Discount value cannot be negative.');
+      setErrorMessage('India discount value cannot be negative.');
+      return;
+    }
+
+    if (ukDiscountValue !== '' && Number(ukDiscountValue) < 0) {
+      setErrorMessage('UK discount value cannot be negative.');
       return;
     }
 
@@ -67,6 +75,7 @@ function CouponEditForm({
       const result = await updateCoupon(coupon.id, {
         code: cleanCode,
         discount_value: Number(discountValue),
+        uk_discount_value: ukDiscountValue === '' ? 0 : Number(ukDiscountValue),
         valid_till: validTill ? new Date(validTill).toISOString() : null,
         count: Number(count || 0),
         thersold: Number(thersold),
@@ -153,24 +162,43 @@ function CouponEditForm({
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="e.g. NOVIQ50"
-              className="input-base font-mono font-bold tracking-wider uppercase border-[#E5DFD3]"
+              className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm font-mono font-bold tracking-wider uppercase text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
             />
           </div>
 
-          {/* Discount Value */}
-          <div className="form-group">
-            <label className="form-label text-xs font-semibold text-[var(--color-text-primary)] mb-1">
-              Discount Value (Amount / ₹) <span className="text-[var(--color-tangerine)]">*</span>
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              required
-              value={discountValue}
-              onChange={(e) => setDiscountValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
-              className="input-base border-[#E5DFD3]"
-            />
+          {/* Discounts Grid (India & UK) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* India Discount Value */}
+            <div className="form-group">
+              <label className="form-label text-xs font-semibold text-[var(--color-text-primary)] mb-1">
+                Discount Value (INR / ₹) <span className="text-[var(--color-tangerine)]">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={discountValue}
+                onChange={(e) => setDiscountValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
+              />
+            </div>
+
+            {/* UK Discount Value */}
+            <div className="form-group">
+              <label className="form-label text-xs font-semibold text-[var(--color-text-primary)] mb-1">
+                UK Discount Value (GBP / £)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={ukDiscountValue}
+                onChange={(e) => setUkDiscountValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                placeholder="e.g. 10.00"
+                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
+              />
+            </div>
           </div>
 
           {/* Valid Till (Expiry) */}
@@ -182,7 +210,7 @@ function CouponEditForm({
               type="datetime-local"
               value={validTill}
               onChange={(e) => setValidTill(e.target.value)}
-              className="input-base border-[#E5DFD3]"
+              className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
             />
             <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
               Leave empty for permanent validity (no expiration).
@@ -202,7 +230,7 @@ function CouponEditForm({
                 min="0"
                 value={count}
                 onChange={(e) => setCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                className="input-base border-[#E5DFD3]"
+                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
               />
             </div>
 
@@ -217,7 +245,7 @@ function CouponEditForm({
                 required
                 value={thersold}
                 onChange={(e) => setThersold(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                className="input-base border-[#E5DFD3]"
+                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
               />
             </div>
           </div>
@@ -227,7 +255,7 @@ function CouponEditForm({
 
           {/* Is Public Toggle */}
           <div className="pt-2">
-            <label className="flex items-start gap-3 p-3.5 bg-[var(--color-soft-cream)]/70 border border-[#E5DFD3] rounded-[var(--radius-lg)] cursor-pointer hover:bg-[var(--color-soft-cream)] transition">
+            <label className="flex items-start gap-3 p-3.5 bg-[var(--color-soft-cream)]/70 border border-[#D5CDBD] rounded-[var(--radius-lg)] cursor-pointer hover:bg-[var(--color-soft-cream)] transition">
               <input
                 type="checkbox"
                 checked={isPublic}

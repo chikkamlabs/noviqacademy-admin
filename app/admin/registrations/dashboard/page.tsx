@@ -158,73 +158,58 @@ export default function RegistrationsDashboardPage() {
               </div>
             </div>
 
-            {/* Metrics & Filter Section */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Total Registrations Today Metric Card */}
-              <div className="card p-5 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm flex items-center justify-between">
-                <div>
-                  <div className="text-xs uppercase font-bold tracking-wider text-[var(--color-text-muted)]">
-                    Total Registrations (Today)
-                  </div>
-                  <div className="metric-value text-3xl font-bold text-[var(--color-text-primary)] mt-1">
-                    {loading && todayCount === 0 ? '...' : todayCount}
-                  </div>
-                  <div className="text-xs text-[var(--color-text-muted)] mt-1">
-                    New enrollments today ({totalCount} all-time)
-                  </div>
-                </div>
-                <div className="w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--color-primary-subtle)] flex items-center justify-center text-[var(--color-tangerine)]">
-                  <Calendar className="w-6 h-6" />
-                </div>
+            {/* Compact Metrics & Filters Section */}
+            <div className="card px-3.5 py-2 md:py-2.5 bg-[var(--color-surface)] border border-[#D5CDBD] rounded-[var(--radius-lg)] shadow-xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5">
+              {/* Total registrations: count then small icon */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] bg-[var(--color-soft-cream)] border border-[#E5DFD3] shrink-0 self-start lg:self-auto">
+                <span className="font-semibold text-xs sm:text-sm md:text-base text-[var(--color-text-primary)]">
+                  Total registrations : <span className="font-bold text-[var(--color-tangerine)] text-xs sm:text-sm md:text-base">{loading && totalCount === 0 ? '...' : totalCount}</span>
+                </span>
+                <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--color-tangerine)] shrink-0" />
               </div>
 
-              {/* Search Bar (registration_id) */}
-              <div className="card p-5 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm flex flex-col justify-center">
-                <label className="text-xs uppercase font-bold tracking-wider text-[var(--color-text-muted)] mb-2">
-                  Search by registration_id
-                </label>
-                <div className="relative flex items-center">
-                  <Search className="w-4 h-4 absolute left-3 text-[var(--color-text-muted)] pointer-events-none" />
+              {/* Search Bar & Filters in a single responsive row on desktop */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 lg:max-w-2xl w-full">
+                {/* Search Bar with proper left padding to avoid icon-placeholder overlap */}
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    placeholder="e.g. REG_101..."
-                    className="input-base pl-9 pr-3 py-2 text-sm border-[#E5DFD3]"
+                    placeholder="Search by registration_id..."
+                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] pl-9 pr-14 py-1 sm:py-1.5 text-xs sm:text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
                   />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => handleSearchChange('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
-              </div>
 
-              {/* Course Filter Dropdown */}
-              <div className="card p-5 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm flex flex-col justify-center">
-                <label className="text-xs uppercase font-bold tracking-wider text-[var(--color-text-muted)] mb-2 flex items-center gap-1.5">
-                  <Filter className="w-3.5 h-3.5 text-[var(--color-tangerine)]" />
-                  <span>Filter by Course</span>
-                </label>
+                {/* Course Filter Dropdown */}
                 <select
                   value={selectedCourse}
                   onChange={(e) => handleCourseChange(e.target.value)}
-                  className="select-base text-sm border-[#E5DFD3] py-2"
+                  className="rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2.5 py-1 sm:py-1.5 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none sm:w-40 shrink-0"
                 >
                   <option value="all">All Courses</option>
                   {courses.map((c) => (
                     <option key={c.id} value={c.id}>
-                      [{c.course_id}] {c.title}
+                      {c.course_id}
                     </option>
                   ))}
                 </select>
-              </div>
 
-              {/* Batch Filter Dropdown */}
-              <div className="card p-5 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm flex flex-col justify-center">
-                <label className="text-xs uppercase font-bold tracking-wider text-[var(--color-text-muted)] mb-2 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-[var(--color-tangerine)]" />
-                  <span>Filter by Batch</span>
-                </label>
+                {/* Batch Filter Dropdown */}
                 <select
                   value={selectedBatch}
                   onChange={(e) => handleBatchChange(e.target.value)}
-                  className="select-base text-sm border-[#E5DFD3] py-2"
+                  className="rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2.5 py-1 sm:py-1.5 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none sm:w-36 shrink-0"
                 >
                   <option value="all">All Batches</option>
                   {availableBatches.map((b) => (

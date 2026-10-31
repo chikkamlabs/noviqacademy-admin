@@ -120,51 +120,44 @@ export default function BatchesDashboardPage() {
               </Link>
             </div>
 
-            {/* Metrics & Search Bar Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Total Active Batches Card */}
-              <div className="card p-5 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm flex items-center justify-between">
-                <div>
-                  <div className="text-xs uppercase font-bold tracking-wider text-[var(--color-text-muted)]">
-                    Total Active Batches
-                  </div>
-                  <div className="metric-value text-3xl font-bold text-[var(--color-text-primary)] mt-1">
-                    {loading && activeCount === 0 ? '...' : activeCount}
-                  </div>
-                  <div className="text-xs text-[var(--color-text-muted)] mt-1">
-                    Open for learner registrations ({totalCount} total)
-                  </div>
-                </div>
-                <div className="w-12 h-12 rounded-[var(--radius-lg)] bg-[var(--color-primary-subtle)] flex items-center justify-center text-[var(--color-tangerine)]">
-                  <Layers className="w-6 h-6" />
-                </div>
+            {/* Compact Metrics & Search Bar Section */}
+            <div className="card px-3.5 py-2 md:py-2.5 bg-[var(--color-surface)] border border-[#D5CDBD] rounded-[var(--radius-lg)] shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              {/* Total batches: count then small icon */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] bg-[var(--color-soft-cream)] border border-[#E5DFD3] shrink-0 self-start sm:self-auto">
+                <span className="font-semibold text-xs sm:text-sm md:text-base text-[var(--color-text-primary)]">
+                  Total batches : <span className="font-bold text-[var(--color-tangerine)] text-xs sm:text-sm md:text-base">{loading && activeCount === 0 ? '...' : activeCount}</span>
+                </span>
+                <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--color-tangerine)] shrink-0" />
               </div>
 
-              {/* Search Bar (Spans 2 columns on md) */}
-              <div className="md:col-span-2 card p-5 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm flex flex-col justify-center">
-                <label className="text-xs uppercase font-bold tracking-wider text-[var(--color-text-muted)] mb-2">
-                  Search Batches (batch_id, course_id)
-                </label>
-                <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-                  <Search className="w-4 h-4 absolute left-3 text-[var(--color-text-muted)] pointer-events-none" />
+              {/* Search Bar with proper left padding to avoid icon-placeholder overlap */}
+              <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 flex-1 sm:max-w-md w-full">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    placeholder="Search by batch_id (e.g. batch_101) or course_id..."
-                    className="input-base pl-9 pr-24 py-2 text-sm border-[#E5DFD3]"
+                    placeholder="Search by batch_id or course_id..."
+                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] pl-9 pr-14 py-1 sm:py-1.5 text-xs sm:text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={() => handleSearchChange('')}
-                      className="absolute right-3 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer"
                     >
                       Clear
                     </button>
                   )}
-                </form>
-              </div>
+                </div>
+                <button
+                  type="submit"
+                  className="btn btn-primary px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold rounded-[var(--radius-md)] cursor-pointer shrink-0"
+                >
+                  Search
+                </button>
+              </form>
             </div>
 
             {/* Batches List Table */}

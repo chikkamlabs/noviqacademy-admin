@@ -17,6 +17,9 @@ import {
   getCourseModulesWithContent,
   createCourseModuleWithContent,
   addCourseModuleContent,
+  updateCourseModule,
+  updateCourseModuleContent,
+  updateModulesOrder,
   deleteCourseModule,
   deleteCourseModuleContent,
   Course,
@@ -24,6 +27,7 @@ import {
   CourseStatus,
   Topic,
   CourseModule,
+  CourseModuleContent,
 } from '@/lib/coursesStore';
 import {
   ArrowLeft,
@@ -38,6 +42,11 @@ import {
   Layers,
   FileText,
   Bookmark,
+  ChevronDown,
+  ChevronRight,
+  Edit2,
+  Save,
+  X,
 } from 'lucide-react';
 
 function OpenCourseContent() {
@@ -45,17 +54,17 @@ function OpenCourseContent() {
   const searchParams = useSearchParams();
   const initialId = searchParams.get('id');
 
-  const [allCourses, setAllCourses] = useState<Course[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialId || '');
   const [course, setCourse] = useState<Course | null>(null);
   const [mentors, setMentors] = useState<MentorSummary[]>([]);
 
-  // Editable Form Fields (Existing Core Fields)
+  // Editable Form Fields (Existing Core Fields + UK Pricing)
   const [title, setTitle] = useState<string>('');
   const [subHeading, setSubHeading] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [price, setPrice] = useState<number>(0);
   const [sellingPrice, setSellingPrice] = useState<number>(0);
+  const [ukPrice, setUkPrice] = useState<number>(0);
+  const [ukSellingPrice, setUkSellingPrice] = useState<number>(0);
   const [duration, setDuration] = useState<number>(30);
   const [mentorId, setMentorId] = useState<string>('');
   const [previewMediaId, setPreviewMediaId] = useState<string>('');
@@ -87,25 +96,41 @@ function OpenCourseContent() {
   const [courseModules, setCourseModules] = useState<CourseModule[]>([]);
   const [loadingModules, setLoadingModules] = useState<boolean>(false);
 
-  // New Module Form Fields
+  // Accordion State: Initially collapsed (empty array so no module expanded by default)
+  const [expandedModuleIds, setExpandedModuleIds] = useState<string[]>([]);
+
+  // New Module Form Fields (Default is_preview: true)
   const [moduleTitle, setModuleTitle] = useState<string>('');
   const [moduleDisplayOrder, setModuleDisplayOrder] = useState<number>(1);
-  const [moduleIsPreview, setModuleIsPreview] = useState<boolean>(false);
+  const [moduleIsPreview, setModuleIsPreview] = useState<boolean>(true);
 
-  // Immediate Module Content Form Fields
+  // Immediate Module Content Form Fields (Default is_preview: true)
   const [contentEmoji, setContentEmoji] = useState<string>('📘');
   const [contentText, setContentText] = useState<string>('');
-  const [contentIsPreview, setContentIsPreview] = useState<boolean>(false);
+  const [contentIsPreview, setContentIsPreview] = useState<boolean>(true);
 
   const [savingModule, setSavingModule] = useState<boolean>(false);
   const [moduleFeedback, setModuleFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Quick add extra content to an existing module
+  // Quick add extra content to an existing module (Default is_preview: true)
   const [activeModuleForContent, setActiveModuleForContent] = useState<string | null>(null);
   const [extraEmoji, setExtraEmoji] = useState<string>('📝');
   const [extraContent, setExtraContent] = useState<string>('');
-  const [extraIsPreview, setExtraIsPreview] = useState<boolean>(false);
+  const [extraIsPreview, setExtraIsPreview] = useState<boolean>(true);
   const [savingExtraContent, setSavingExtraContent] = useState<boolean>(false);
+
+  // Edit Existing Module State
+  const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
+  const [editModuleTitle, setEditModuleTitle] = useState<string>('');
+  const [editModuleIsPreview, setEditModuleIsPreview] = useState<boolean>(true);
+  const [savingEditModule, setSavingEditModule] = useState<boolean>(false);
+
+  // Edit Existing Content State
+  const [editingContentId, setEditingContentId] = useState<string | null>(null);
+  const [editContentEmoji, setEditContentEmoji] = useState<string>('');
+  const [editContentText, setEditContentText] = useState<string>('');
+  const [editContentIsPreview, setEditContentIsPreview] = useState<boolean>(true);
+  const [savingEditContent, setSavingEditContent] = useState<boolean>(false);
 
   const loadTopicsData = useCallback(async (courseId: string) => {
     const [topicsRes, assignedRes] = await Promise.all([
@@ -142,6 +167,8 @@ function OpenCourseContent() {
       setDescription(c.description || '');
       setPrice(c.price || 0);
       setSellingPrice(c.selling_price || 0);
+      setUkPrice(c.uk_price || 0);
+      setUkSellingPrice(c.uk_selling_price || 0);
       setDuration(c.duration || 0);
       setMentorId(c.mentor_id || '');
       setPreviewMediaId(c.preview_media_id || '');
@@ -168,12 +195,10 @@ function OpenCourseContent() {
       ]);
 
       const coursesList = coursesResult.data || [];
-      setAllCourses(coursesList);
       setMentors(mentorsList || []);
 
       const targetId = initialId || (coursesList.length > 0 ? coursesList[0].id : '');
       if (targetId) {
-        setSelectedCourseId(targetId);
         await loadCourseDetails(targetId);
       }
       setLoading(false);
@@ -182,16 +207,7 @@ function OpenCourseContent() {
     init();
   }, [initialId, loadCourseDetails]);
 
-  const handleSelectCourse = async (id: string) => {
-    setSelectedCourseId(id);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setTopicFeedback(null);
-    setModuleFeedback(null);
-    await loadCourseDetails(id);
-    router.replace(`/admin/courses/opencourse?id=${id}`);
-  };
-
+  // Learnings item management
   const addLearning = () => {
     if (learningItem.trim()) {
       setCourseLearnings([...courseLearnings, learningItem.trim()]);
@@ -199,15 +215,28 @@ function OpenCourseContent() {
     }
   };
 
+  const handleEditLearning = (index: number, val: string) => {
+    const updated = [...courseLearnings];
+    updated[index] = val;
+    setCourseLearnings(updated);
+  };
+
   const removeLearning = (index: number) => {
     setCourseLearnings(courseLearnings.filter((_, i) => i !== index));
   };
 
+  // Inclusions item management
   const addInclude = () => {
     if (includeItem.trim()) {
       setCourseIncludes([...courseIncludes, includeItem.trim()]);
       setIncludeItem('');
     }
+  };
+
+  const handleEditInclude = (index: number, val: string) => {
+    const updated = [...courseIncludes];
+    updated[index] = val;
+    setCourseIncludes(updated);
   };
 
   const removeInclude = (index: number) => {
@@ -227,6 +256,11 @@ function OpenCourseContent() {
       return;
     }
 
+    if (price < 0 || sellingPrice < 0 || ukPrice < 0 || ukSellingPrice < 0) {
+      setErrorMessage('Prices cannot be negative numbers.');
+      return;
+    }
+
     setUpdating(true);
 
     const result = await updateCourse(course.id, {
@@ -235,6 +269,8 @@ function OpenCourseContent() {
       description: description.trim() || null,
       price: Number(price),
       selling_price: Number(sellingPrice),
+      uk_price: Number(ukPrice),
+      uk_selling_price: Number(ukSellingPrice),
       duration: Number(duration),
       mentor_id: mentorId || null,
       preview_media_id: previewMediaId.trim() || null,
@@ -252,12 +288,6 @@ function OpenCourseContent() {
 
     setSuccessMessage(`Course "${result.data?.title}" updated successfully.`);
     setUpdating(false);
-
-    // Refresh courses list
-    const refreshed = await getCourses();
-    if (refreshed.data) {
-      setAllCourses(refreshed.data);
-    }
   };
 
   // --- Topic Handlers ---
@@ -285,7 +315,6 @@ function OpenCourseContent() {
       return;
     }
 
-    // Append to available topics and auto-select
     const addedTopic = res.data;
     setAvailableTopics((prev) => [...prev, addedTopic]);
     setSelectedTopicIds((prev) => [...prev, addedTopic.id]);
@@ -317,7 +346,55 @@ function OpenCourseContent() {
     setSavingTopics(false);
   };
 
-  // --- Module Handlers ---
+  // --- Module Accordion Toggle ---
+  const toggleModuleCollapse = (moduleId: string) => {
+    setExpandedModuleIds((prev) =>
+      prev.includes(moduleId) ? prev.filter((id) => id !== moduleId) : [...prev, moduleId]
+    );
+  };
+
+  // --- Auto Reorder Display Orders When One Changes ---
+  const handleModuleOrderChange = async (targetModuleId: string, targetOrder: number) => {
+    if (targetOrder < 1) targetOrder = 1;
+    // Sort current modules
+    const sorted = [...courseModules].sort((a, b) => a.display_order - b.display_order);
+    const currentIndex = sorted.findIndex((m) => m.id === targetModuleId);
+    if (currentIndex === -1) return;
+
+    const [targetModule] = sorted.splice(currentIndex, 1);
+    const newIndex = Math.min(Math.max(0, targetOrder - 1), sorted.length);
+    sorted.splice(newIndex, 0, targetModule);
+
+    // Re-index all sequentially from 1 to N
+    const reorderedList = sorted.map((mod, index) => ({
+      id: mod.id,
+      display_order: index + 1,
+    }));
+
+    // Optimistically update local state
+    setCourseModules((prev) =>
+      prev.map((mod) => {
+        const found = reorderedList.find((r) => r.id === mod.id);
+        return found ? { ...mod, display_order: found.display_order } : mod;
+      })
+    );
+
+    // Persist to Supabase
+    setModuleFeedback(null);
+    const res = await updateModulesOrder(reorderedList);
+    if (res.error) {
+      setModuleFeedback({ type: 'error', text: res.error.message || 'Failed to update module order.' });
+      if (course) await loadModulesData(course.id);
+    } else {
+      setModuleFeedback({
+        type: 'success',
+        text: 'Module display order updated. Other modules shifted automatically.',
+      });
+      if (course) await loadModulesData(course.id);
+    }
+  };
+
+  // --- Save New Module and Content ---
   const handleSaveModuleAndContent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!course) return;
@@ -355,14 +432,65 @@ function OpenCourseContent() {
     setModuleFeedback({ type: 'success', text: `Module "${moduleTitle}" and content saved successfully!` });
     setModuleTitle('');
     setContentText('');
-    setModuleIsPreview(false);
-    setContentIsPreview(false);
+    setModuleIsPreview(true);
+    setContentIsPreview(true);
 
     // Refresh modules
     await loadModulesData(course.id);
     setSavingModule(false);
   };
 
+  // --- Edit Existing Module Header (Title & Preview) ---
+  const startEditModule = (m: CourseModule) => {
+    setEditingModuleId(m.id);
+    setEditModuleTitle(m.title);
+    setEditModuleIsPreview(Boolean(m.is_preview));
+  };
+
+  const handleSaveModuleEdit = async (moduleId: string) => {
+    if (!editModuleTitle.trim()) return;
+    setSavingEditModule(true);
+    const res = await updateCourseModule(moduleId, {
+      title: editModuleTitle.trim(),
+      is_preview: editModuleIsPreview,
+    });
+    if (res.error) {
+      setModuleFeedback({ type: 'error', text: res.error.message || 'Failed to update module.' });
+    } else {
+      setModuleFeedback({ type: 'success', text: 'Module updated successfully.' });
+      setEditingModuleId(null);
+      if (course) await loadModulesData(course.id);
+    }
+    setSavingEditModule(false);
+  };
+
+  // --- Edit Existing Module Content ---
+  const startEditContent = (content: CourseModuleContent) => {
+    setEditingContentId(content.id);
+    setEditContentEmoji(content.emoji || '📘');
+    setEditContentText(content.content);
+    setEditContentIsPreview(Boolean(content.is_preview));
+  };
+
+  const handleSaveContentEdit = async (contentId: string) => {
+    if (!editContentText.trim()) return;
+    setSavingEditContent(true);
+    const res = await updateCourseModuleContent(contentId, {
+      emoji: editContentEmoji.trim() || '📘',
+      content: editContentText.trim(),
+      is_preview: editContentIsPreview,
+    });
+    if (res.error) {
+      setModuleFeedback({ type: 'error', text: res.error.message || 'Failed to update content.' });
+    } else {
+      setModuleFeedback({ type: 'success', text: 'Content updated successfully.' });
+      setEditingContentId(null);
+      if (course) await loadModulesData(course.id);
+    }
+    setSavingEditContent(false);
+  };
+
+  // --- Quick Add Extra Content to Existing Module ---
   const handleSaveExtraContent = async (moduleId: string) => {
     if (!extraContent.trim()) return;
 
@@ -378,6 +506,7 @@ function OpenCourseContent() {
     } else {
       setModuleFeedback({ type: 'success', text: 'New content item added successfully!' });
       setExtraContent('');
+      setExtraIsPreview(true);
       setActiveModuleForContent(null);
       if (course) await loadModulesData(course.id);
     }
@@ -410,46 +539,23 @@ function OpenCourseContent() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-12">
-      {/* Top Bar with Back Link and Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-[#E5DFD3]">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/admin/courses/dashboard"
-            className="p-2 rounded-[var(--radius-md)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-soft-cream)] border border-[#E5DFD3] transition"
-            title="Back to Courses Dashboard"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div>
-            <h1 className="page-title text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
-              Course Details & Editor
-            </h1>
-            <p className="subheading-text text-xs text-[var(--color-text-muted)]">
-              View and edit complete course details. Course ID is strictly locked and cannot be changed.
-            </p>
-          </div>
+      {/* Top Bar with Back Link (Select Course Option Removed) */}
+      <div className="flex items-center gap-3 pb-2 border-b border-[#E5DFD3]">
+        <Link
+          href="/admin/courses/dashboard"
+          className="p-2 rounded-[var(--radius-md)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-soft-cream)] border border-[#E5DFD3] transition"
+          title="Back to Courses Dashboard"
+        >
+          <ArrowLeft className="w-4 h-4" />
+        </Link>
+        <div>
+          <h1 className="page-title text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
+            Course Details &amp; Editor
+          </h1>
+          <p className="subheading-text text-xs text-[var(--color-text-muted)]">
+            View and edit complete course details. Course ID is strictly locked and cannot be changed.
+          </p>
         </div>
-
-        {/* Course Switcher Selector */}
-        {allCourses.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label htmlFor="coursePicker" className="text-xs font-semibold text-[var(--color-text-muted)] shrink-0">
-              Select Course:
-            </label>
-            <select
-              id="coursePicker"
-              value={selectedCourseId}
-              onChange={(e) => handleSelectCourse(e.target.value)}
-              className="rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] outline-none"
-            >
-              {allCourses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.course_id} - {c.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       {/* Success Notification */}
@@ -483,18 +589,15 @@ function OpenCourseContent() {
       ) : (
         <>
           {/* =========================================================================
-              PART 1: EXISTING CORE COURSE FORM (KEPT INTACT AS INSTRUCTED)
+              PART 1: CORE COURSE FORM (UUID REMOVED AS REQUESTED)
               ========================================================================= */}
           <form onSubmit={handleUpdate} className="space-y-6">
             {/* Section 1: Course Identity & Content */}
             <div className="card p-6 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm space-y-5">
-              <div className="flex items-center justify-between border-b border-[#E5DFD3] pb-2">
+              <div className="border-b border-[#E5DFD3] pb-2">
                 <h2 className="text-base font-bold text-[var(--color-text-primary)]">
-                  1. Core Identity & Information
+                  1. Core Identity &amp; Information
                 </h2>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-[var(--color-soft-cream)] text-[var(--color-text-muted)]">
-                  UUID: {course.id}
-                </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -561,14 +664,14 @@ function OpenCourseContent() {
               </div>
             </div>
 
-            {/* Section 2: Pricing, Allocation & Status */}
+            {/* Section 2: Pricing (India + UK Pricing), Mentor Allocation & Status */}
             <div className="card p-6 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm space-y-5">
               <h2 className="text-base font-bold text-[var(--color-text-primary)] border-b border-[#E5DFD3] pb-2">
-                2. Pricing, Mentor Allocation & Status
+                2. Pricing, Mentor Allocation &amp; Status
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Original Price */}
+                {/* Original Price (India) */}
                 <div className="form-group mb-0">
                   <label htmlFor="editPrice" className="form-label mb-1">
                     Original Price (₹)
@@ -583,7 +686,7 @@ function OpenCourseContent() {
                   />
                 </div>
 
-                {/* Selling Price */}
+                {/* Selling Price (India) */}
                 <div className="form-group mb-0">
                   <label htmlFor="editSellingPrice" className="form-label mb-1">
                     Selling Price (₹)
@@ -613,6 +716,52 @@ function OpenCourseContent() {
                   />
                 </div>
 
+                {/* UK Original Price */}
+                <div className="form-group mb-0">
+                  <label htmlFor="editUkPrice" className="form-label mb-1">
+                    UK Original Price (£) (uk_price)
+                  </label>
+                  <input
+                    id="editUkPrice"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={ukPrice}
+                    onChange={(e) => setUkPrice(Number(e.target.value))}
+                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
+                  />
+                </div>
+
+                {/* UK Selling Price */}
+                <div className="form-group mb-0">
+                  <label htmlFor="editUkSellingPrice" className="form-label mb-1">
+                    UK Selling Price (£) (uk_selling_price)
+                  </label>
+                  <input
+                    id="editUkSellingPrice"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={ukSellingPrice}
+                    onChange={(e) => setUkSellingPrice(Number(e.target.value))}
+                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
+                  />
+                </div>
+
+                {/* Preview Media ID */}
+                <div className="form-group mb-0">
+                  <label htmlFor="editPreviewMediaId" className="form-label mb-1">
+                    Preview Media ID / URL
+                  </label>
+                  <input
+                    id="editPreviewMediaId"
+                    type="text"
+                    value={previewMediaId}
+                    onChange={(e) => setPreviewMediaId(e.target.value)}
+                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
+                  />
+                </div>
+
                 {/* Mentor Assignment */}
                 <div className="form-group md:col-span-2 mb-0">
                   <label htmlFor="editMentorId" className="form-label mb-1">
@@ -631,20 +780,6 @@ function OpenCourseContent() {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {/* Preview Media ID */}
-                <div className="form-group mb-0">
-                  <label htmlFor="editPreviewMediaId" className="form-label mb-1">
-                    Preview Media ID / URL
-                  </label>
-                  <input
-                    id="editPreviewMediaId"
-                    type="text"
-                    value={previewMediaId}
-                    onChange={(e) => setPreviewMediaId(e.target.value)}
-                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
-                  />
                 </div>
 
                 {/* Status */}
@@ -679,17 +814,23 @@ function OpenCourseContent() {
               </div>
             </div>
 
-            {/* Section 3: Curriculum Details */}
+            {/* Section 3: Curriculum Details (Editable Existing Data) */}
             <div className="card p-6 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm space-y-5">
               <h2 className="text-base font-bold text-[var(--color-text-primary)] border-b border-[#E5DFD3] pb-2">
-                3. Learnings & Inclusions
+                3. Learnings &amp; Inclusions
               </h2>
 
               {/* Course Learnings */}
               <div className="space-y-3">
-                <label className="form-label mb-1">
-                  Course Learnings (course_learnings)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="form-label mb-0">
+                    Course Learnings (course_learnings)
+                  </label>
+                  <span className="text-[11px] text-[var(--color-text-muted)]">
+                    Edit existing items directly below or add new ones
+                  </span>
+                </div>
+
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -715,17 +856,27 @@ function OpenCourseContent() {
                 </div>
 
                 {courseLearnings.length > 0 && (
-                  <div className="space-y-1.5 pt-1">
+                  <div className="space-y-2 pt-1">
                     {courseLearnings.map((item, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between p-2 rounded-[var(--radius-sm)] bg-[var(--color-soft-cream)] text-xs text-[var(--color-text-primary)]"
+                        className="flex items-center gap-2 p-1.5 rounded-[var(--radius-sm)] bg-[var(--color-soft-cream)] border border-[#E5DFD3]"
                       >
-                        <span>• {item}</span>
+                        <span className="text-xs text-[var(--color-tangerine)] font-bold pl-2 shrink-0">
+                          {idx + 1}.
+                        </span>
+                        <input
+                          type="text"
+                          value={item}
+                          onChange={(e) => handleEditLearning(idx, e.target.value)}
+                          placeholder="Edit learning item..."
+                          className="flex-1 bg-transparent border-0 px-2 py-1 text-xs text-[var(--color-text-primary)] focus:bg-[var(--color-surface)] focus:ring-1 focus:ring-[var(--color-tangerine)] rounded outline-none transition"
+                        />
                         <button
                           type="button"
                           onClick={() => removeLearning(idx)}
-                          className="text-red-500 hover:text-red-700 cursor-pointer p-1"
+                          className="text-red-500 hover:text-red-700 cursor-pointer p-1.5 shrink-0"
+                          title="Remove item"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -737,9 +888,15 @@ function OpenCourseContent() {
 
               {/* Course Includes */}
               <div className="space-y-3 pt-3 border-t border-[#E5DFD3]">
-                <label className="form-label mb-1">
-                  Course Includes (course_includes)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="form-label mb-0">
+                    Course Includes (course_includes)
+                  </label>
+                  <span className="text-[11px] text-[var(--color-text-muted)]">
+                    Edit existing items directly below or add new ones
+                  </span>
+                </div>
+
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -765,17 +922,27 @@ function OpenCourseContent() {
                 </div>
 
                 {courseIncludes.length > 0 && (
-                  <div className="space-y-1.5 pt-1">
+                  <div className="space-y-2 pt-1">
                     {courseIncludes.map((item, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between p-2 rounded-[var(--radius-sm)] bg-[var(--color-soft-cream)] text-xs text-[var(--color-text-primary)]"
+                        className="flex items-center gap-2 p-1.5 rounded-[var(--radius-sm)] bg-[var(--color-soft-cream)] border border-[#E5DFD3]"
                       >
-                        <span>• {item}</span>
+                        <span className="text-xs text-[var(--color-tangerine)] font-bold pl-2 shrink-0">
+                          {idx + 1}.
+                        </span>
+                        <input
+                          type="text"
+                          value={item}
+                          onChange={(e) => handleEditInclude(idx, e.target.value)}
+                          placeholder="Edit inclusion item..."
+                          className="flex-1 bg-transparent border-0 px-2 py-1 text-xs text-[var(--color-text-primary)] focus:bg-[var(--color-surface)] focus:ring-1 focus:ring-[var(--color-tangerine)] rounded outline-none transition"
+                        />
                         <button
                           type="button"
                           onClick={() => removeInclude(idx)}
-                          className="text-red-500 hover:text-red-700 cursor-pointer p-1"
+                          className="text-red-500 hover:text-red-700 cursor-pointer p-1.5 shrink-0"
+                          title="Remove item"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -948,7 +1115,12 @@ function OpenCourseContent() {
           </div>
 
           {/* =========================================================================
-              PART 3: COURSE MODULES & IMMEDIATELY ASK COURSE MODULE CONTENT & SAVE BUTTON
+              PART 3: COURSE MODULES & CONTENT
+              - "Create New Course Module & Content" placed ABOVE the Existing Course Modules
+              - Default is_preview is TRUE
+              - All content collapsed by default; tap module header to expand
+              - Allow editing Existing Course Modules & Content
+              - Changing one display order auto-adjusts other module orders
               ========================================================================= */}
           <div className="card p-6 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm space-y-6">
             <div className="flex items-center justify-between border-b border-[#E5DFD3] pb-3">
@@ -956,10 +1128,10 @@ function OpenCourseContent() {
                 <Layers className="w-5 h-5 text-[var(--color-tangerine)]" />
                 <div>
                   <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
-                    Course Modules & Content
+                    Course Modules &amp; Content
                   </h2>
                   <p className="text-xs text-[var(--color-text-muted)]">
-                    Define course modules and immediately add module lessons/content with preview controls.
+                    Create new modules or edit existing modules, display orders, and content lessons.
                   </p>
                 </div>
               </div>
@@ -983,174 +1155,7 @@ function OpenCourseContent() {
               </div>
             )}
 
-            {/* Existing Modules & Contents List */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                Existing Course Modules ({courseModules.length})
-              </h3>
-
-              {loadingModules ? (
-                <div className="flex items-center justify-center py-6 text-xs text-[var(--color-text-muted)] gap-2">
-                  <Loader2 className="w-4 h-4 anim-spin text-[var(--color-tangerine)]" />
-                  <span>Loading modules and content...</span>
-                </div>
-              ) : courseModules.length === 0 ? (
-                <div className="p-6 text-center rounded-[var(--radius-md)] bg-[var(--color-soft-cream)] border border-[#E5DFD3] text-xs text-[var(--color-text-muted)]">
-                  No modules created for this course yet. Use the form below to create your first module and content.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {courseModules.map((m, idx) => (
-                    <div
-                      key={m.id}
-                      className="rounded-[var(--radius-md)] border border-[#E5DFD3] bg-[var(--color-surface)] overflow-hidden"
-                    >
-                      {/* Module Header */}
-                      <div className="p-3.5 bg-[var(--color-soft-cream)] border-b border-[#E5DFD3] flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <span className="font-mono text-xs font-bold text-[var(--color-tangerine)]">
-                            #{m.display_order}
-                          </span>
-                          <span className="font-semibold text-sm text-[var(--color-text-primary)]">
-                            {m.title}
-                          </span>
-                          {m.is_preview && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-primary-subtle)] text-[var(--color-tangerine)] border border-[var(--color-tangerine)]/30">
-                              Preview Available
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setActiveModuleForContent(
-                                activeModuleForContent === m.id ? null : m.id
-                              )
-                            }
-                            className="btn btn-outline text-[11px] px-2.5 py-1 rounded-[var(--radius-sm)] flex items-center gap-1 cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Add Content</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteModule(m.id)}
-                            className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
-                            title="Delete Module"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Module Content Items */}
-                      <div className="p-3 space-y-2">
-                        {(!m.contents || m.contents.length === 0) ? (
-                          <div className="text-xs text-[var(--color-text-muted)] italic">
-                            No content items in this module yet.
-                          </div>
-                        ) : (
-                          <div className="space-y-1.5">
-                            {m.contents.map((item) => (
-                              <div
-                                key={item.id}
-                                className="flex items-start justify-between p-2.5 rounded-[var(--radius-sm)] bg-[#FAF8F3] border border-[#EBE5D8] text-xs"
-                              >
-                                <div className="flex items-start gap-2.5">
-                                  <span className="text-sm shrink-0">{item.emoji || '📄'}</span>
-                                  <div>
-                                    <p className="text-[var(--color-text-primary)] font-medium leading-relaxed">
-                                      {item.content}
-                                    </p>
-                                    {item.is_preview && (
-                                      <span className="text-[10px] text-[var(--color-tangerine)] font-semibold mt-0.5 inline-block">
-                                        Public Preview
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteContent(item.id)}
-                                  className="text-red-400 hover:text-red-600 p-1 cursor-pointer shrink-0 ml-2"
-                                  title="Delete Content Item"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Quick Add Content Drawer to this specific module */}
-                        {activeModuleForContent === m.id && (
-                          <div className="mt-3 p-3 rounded-[var(--radius-md)] bg-[var(--color-soft-cream)] border border-[#D5CDBD] space-y-3 anim-fade-in">
-                            <span className="text-xs font-bold text-[var(--color-text-primary)]">
-                              Add Additional Content to &quot;{m.title}&quot;
-                            </span>
-                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                              <div>
-                                <label className="form-label text-[11px] mb-1">Emoji</label>
-                                <input
-                                  type="text"
-                                  value={extraEmoji}
-                                  onChange={(e) => setExtraEmoji(e.target.value)}
-                                  className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-center"
-                                />
-                              </div>
-                              <div className="sm:col-span-3">
-                                <label className="form-label text-[11px] mb-1">Content Text</label>
-                                <input
-                                  type="text"
-                                  value={extraContent}
-                                  onChange={(e) => setExtraContent(e.target.value)}
-                                  placeholder="e.g. Chapter 1: Installing dependencies..."
-                                  className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs text-[var(--color-text-primary)]"
-                                />
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between pt-1">
-                              <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={extraIsPreview}
-                                  onChange={(e) => setExtraIsPreview(e.target.checked)}
-                                  className="accent-[var(--color-tangerine)]"
-                                />
-                                <span>Allow Public Preview</span>
-                              </label>
-
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveModuleForContent(null)}
-                                  className="btn btn-outline text-xs px-2.5 py-1"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveExtraContent(m.id)}
-                                  disabled={savingExtraContent || !extraContent.trim()}
-                                  className="btn btn-primary text-xs px-3 py-1 font-semibold cursor-pointer"
-                                >
-                                  {savingExtraContent ? 'Saving...' : 'Save Content'}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Add New Module and Immediately Ask Content Form */}
+            {/* 1. "Create New Course Module & Content" SECTION PLACED ABOVE */}
             <form
               onSubmit={handleSaveModuleAndContent}
               className="p-5 rounded-[var(--radius-md)] bg-[var(--color-soft-cream)] border border-[#D5CDBD] space-y-4"
@@ -1202,7 +1207,7 @@ function OpenCourseContent() {
                     className="w-4 h-4 accent-[var(--color-tangerine)] cursor-pointer"
                   />
                   <label htmlFor="newModulePreview" className="text-xs font-semibold text-[var(--color-text-primary)] cursor-pointer">
-                    Module Is Preview (Open for unenrolled learners)
+                    Module Is Preview (Open for unenrolled learners - Default: True)
                   </label>
                 </div>
               </div>
@@ -1254,7 +1259,7 @@ function OpenCourseContent() {
                       className="w-4 h-4 accent-[var(--color-tangerine)] cursor-pointer"
                     />
                     <label htmlFor="newContentPreview" className="text-xs font-semibold text-[var(--color-text-primary)] cursor-pointer">
-                      Content item is previewable
+                      Content item is previewable (Default: True)
                     </label>
                   </div>
                 </div>
@@ -1281,6 +1286,394 @@ function OpenCourseContent() {
                 </button>
               </div>
             </form>
+
+            {/* 2. EXISTING COURSE MODULES & CONTENT LIST (COLLAPSED BY DEFAULT, TAP TO EXPAND) */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+                  Existing Course Modules ({courseModules.length})
+                </h3>
+                <span className="text-[11px] text-[var(--color-text-muted)]">
+                  Tap any module to expand / collapse contents
+                </span>
+              </div>
+
+              {loadingModules ? (
+                <div className="flex items-center justify-center py-6 text-xs text-[var(--color-text-muted)] gap-2">
+                  <Loader2 className="w-4 h-4 anim-spin text-[var(--color-tangerine)]" />
+                  <span>Loading modules and content...</span>
+                </div>
+              ) : courseModules.length === 0 ? (
+                <div className="p-6 text-center rounded-[var(--radius-md)] bg-[var(--color-soft-cream)] border border-[#E5DFD3] text-xs text-[var(--color-text-muted)]">
+                  No modules created for this course yet. Use the form above to create your first module and content.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {[...courseModules]
+                    .sort((a, b) => a.display_order - b.display_order)
+                    .map((m) => {
+                      const isExpanded = expandedModuleIds.includes(m.id);
+                      const isEditingThisModule = editingModuleId === m.id;
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="rounded-[var(--radius-md)] border border-[#E5DFD3] bg-[var(--color-surface)] overflow-hidden shadow-xs"
+                        >
+                          {/* Module Header - Tap to Expand/Collapse */}
+                          <div className="p-3.5 bg-[var(--color-soft-cream)] border-b border-[#E5DFD3] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            {/* Left: Tap to Expand / Collapse toggle and Info */}
+                            <div
+                              onClick={() => toggleModuleCollapse(m.id)}
+                              className="flex items-center gap-2.5 cursor-pointer flex-1 select-none"
+                            >
+                              <button
+                                type="button"
+                                className="p-1 rounded hover:bg-black/5 text-[var(--color-text-muted)]"
+                                aria-label={isExpanded ? 'Collapse module' : 'Expand module'}
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="w-4 h-4 text-[var(--color-tangerine)]" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)]" />
+                                )}
+                              </button>
+
+                              {/* Display Order Selector: Changing one auto changes others */}
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 shrink-0"
+                                title="Change display order (auto-shifts others)"
+                              >
+                                <span className="text-[11px] font-bold text-[var(--color-text-muted)]">
+                                  Order:
+                                </span>
+                                <select
+                                  value={m.display_order}
+                                  onChange={(e) =>
+                                    handleModuleOrderChange(m.id, Number(e.target.value))
+                                  }
+                                  className="text-xs font-mono font-bold text-[var(--color-tangerine)] bg-[var(--color-surface)] border border-[#D5CDBD] rounded px-1.5 py-0.5 outline-none cursor-pointer"
+                                >
+                                  {courseModules.map((_, i) => (
+                                    <option key={i + 1} value={i + 1}>
+                                      #{i + 1}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <span className="font-semibold text-sm text-[var(--color-text-primary)]">
+                                {m.title}
+                              </span>
+
+                              {m.is_preview ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-primary-subtle)] text-[var(--color-tangerine)] border border-[var(--color-tangerine)]/30">
+                                  Preview Available
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                                  Locked
+                                </span>
+                              )}
+
+                              <span className="text-[11px] text-[var(--color-text-muted)] ml-auto sm:ml-0">
+                                ({m.contents?.length || 0} lessons)
+                              </span>
+                            </div>
+
+                            {/* Right: Actions (Edit Module, Add Content, Delete Module) */}
+                            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                              {/* Edit Module Button */}
+                              <button
+                                type="button"
+                                onClick={() => startEditModule(m)}
+                                className="btn btn-outline text-[11px] px-2.5 py-1 rounded-[var(--radius-sm)] flex items-center gap-1 cursor-pointer"
+                                title="Edit Module Title & Preview status"
+                              >
+                                <Edit2 className="w-3 h-3 text-[var(--color-tangerine)]" />
+                                <span>Edit Module</span>
+                              </button>
+
+                              {/* Add Content Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!isExpanded) toggleModuleCollapse(m.id);
+                                  setActiveModuleForContent(
+                                    activeModuleForContent === m.id ? null : m.id
+                                  );
+                                }}
+                                className="btn btn-outline text-[11px] px-2.5 py-1 rounded-[var(--radius-sm)] flex items-center gap-1 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>Add Content</span>
+                              </button>
+
+                              {/* Delete Module Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteModule(m.id)}
+                                className="text-red-500 hover:text-red-700 p-1.5 cursor-pointer rounded hover:bg-red-50"
+                                title="Delete Module"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Inline Edit Form for Module Header */}
+                          {isEditingThisModule && (
+                            <div className="p-3.5 bg-[var(--color-surface)] border-b border-[#E5DFD3] space-y-3">
+                              <span className="text-xs font-bold text-[var(--color-text-primary)]">
+                                Edit Module Details
+                              </span>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="sm:col-span-2">
+                                  <label className="form-label text-[11px] mb-1">
+                                    Module Title
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editModuleTitle}
+                                    onChange={(e) => setEditModuleTitle(e.target.value)}
+                                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs text-[var(--color-text-primary)] outline-none focus:border-[var(--color-tangerine)]"
+                                  />
+                                </div>
+                                <div className="flex items-center pt-4">
+                                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={editModuleIsPreview}
+                                      onChange={(e) => setEditModuleIsPreview(e.target.checked)}
+                                      className="w-4 h-4 accent-[var(--color-tangerine)] cursor-pointer"
+                                    />
+                                    <span>Preview Available</span>
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="flex justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingModuleId(null)}
+                                  className="btn btn-outline text-xs px-2.5 py-1 flex items-center gap-1"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>Cancel</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={savingEditModule || !editModuleTitle.trim()}
+                                  onClick={() => handleSaveModuleEdit(m.id)}
+                                  className="btn btn-primary text-xs px-3 py-1 font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                >
+                                  {savingEditModule ? (
+                                    <Loader2 className="w-3 h-3 anim-spin" />
+                                  ) : (
+                                    <Save className="w-3 h-3" />
+                                  )}
+                                  <span>Save Module</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Module Content Items (Shown ONLY if expanded by tap) */}
+                          {isExpanded && (
+                            <div className="p-3.5 space-y-3 bg-[var(--color-surface)] anim-fade-in">
+                              {(!m.contents || m.contents.length === 0) ? (
+                                <div className="text-xs text-[var(--color-text-muted)] italic py-2">
+                                  No content items in this module yet. Click &quot;Add Content&quot; above to add lessons.
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {m.contents.map((item) => {
+                                    const isEditingThisContent = editingContentId === item.id;
+
+                                    if (isEditingThisContent) {
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          className="p-3 rounded-[var(--radius-sm)] bg-[var(--color-soft-cream)] border border-[var(--color-tangerine)]/40 space-y-2"
+                                        >
+                                          <div className="text-xs font-bold text-[var(--color-text-primary)]">
+                                            Edit Lesson Content
+                                          </div>
+                                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                                            <div>
+                                              <label className="form-label text-[11px] mb-1">
+                                                Emoji
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={editContentEmoji}
+                                                onChange={(e) => setEditContentEmoji(e.target.value)}
+                                                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2 py-1 text-xs text-center outline-none"
+                                              />
+                                            </div>
+                                            <div className="sm:col-span-3">
+                                              <label className="form-label text-[11px] mb-1">
+                                                Content Text
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={editContentText}
+                                                onChange={(e) => setEditContentText(e.target.value)}
+                                                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2.5 py-1 text-xs outline-none focus:border-[var(--color-tangerine)]"
+                                              />
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center justify-between pt-1">
+                                            <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] cursor-pointer">
+                                              <input
+                                                type="checkbox"
+                                                checked={editContentIsPreview}
+                                                onChange={(e) => setEditContentIsPreview(e.target.checked)}
+                                                className="accent-[var(--color-tangerine)]"
+                                              />
+                                              <span>Allow Public Preview</span>
+                                            </label>
+
+                                            <div className="flex gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => setEditingContentId(null)}
+                                                className="btn btn-outline text-xs px-2.5 py-1"
+                                              >
+                                                Cancel
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleSaveContentEdit(item.id)}
+                                                disabled={savingEditContent || !editContentText.trim()}
+                                                className="btn btn-primary text-xs px-3 py-1 font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                              >
+                                                {savingEditContent ? (
+                                                  <Loader2 className="w-3 h-3 anim-spin" />
+                                                ) : (
+                                                  <Save className="w-3 h-3" />
+                                                )}
+                                                <span>Save</span>
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className="flex items-start justify-between p-2.5 rounded-[var(--radius-sm)] bg-[#FAF8F3] border border-[#EBE5D8] text-xs"
+                                      >
+                                        <div className="flex items-start gap-2.5 flex-1">
+                                          <span className="text-sm shrink-0">{item.emoji || '📄'}</span>
+                                          <div>
+                                            <p className="text-[var(--color-text-primary)] font-medium leading-relaxed">
+                                              {item.content}
+                                            </p>
+                                            {item.is_preview ? (
+                                              <span className="text-[10px] text-[var(--color-tangerine)] font-semibold mt-0.5 inline-block">
+                                                Public Preview
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] text-gray-500 font-semibold mt-0.5 inline-block">
+                                                Enrolled Only
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => startEditContent(item)}
+                                            className="text-gray-500 hover:text-[var(--color-tangerine)] p-1 cursor-pointer"
+                                            title="Edit Content"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteContent(item.id)}
+                                            className="text-red-400 hover:text-red-600 p-1 cursor-pointer"
+                                            title="Delete Content Item"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Quick Add Content Drawer to this specific module */}
+                              {activeModuleForContent === m.id && (
+                                <div className="mt-3 p-3 rounded-[var(--radius-md)] bg-[var(--color-soft-cream)] border border-[#D5CDBD] space-y-3 anim-fade-in">
+                                  <span className="text-xs font-bold text-[var(--color-text-primary)]">
+                                    Add Additional Content to &quot;{m.title}&quot;
+                                  </span>
+                                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                                    <div>
+                                      <label className="form-label text-[11px] mb-1">Emoji</label>
+                                      <input
+                                        type="text"
+                                        value={extraEmoji}
+                                        onChange={(e) => setExtraEmoji(e.target.value)}
+                                        className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-center"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-3">
+                                      <label className="form-label text-[11px] mb-1">Content Text</label>
+                                      <input
+                                        type="text"
+                                        value={extraContent}
+                                        onChange={(e) => setExtraContent(e.target.value)}
+                                        placeholder="e.g. Chapter 1: Installing dependencies..."
+                                        className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs text-[var(--color-text-primary)]"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-between pt-1">
+                                    <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={extraIsPreview}
+                                        onChange={(e) => setExtraIsPreview(e.target.checked)}
+                                        className="accent-[var(--color-tangerine)]"
+                                      />
+                                      <span>Allow Public Preview (Default: True)</span>
+                                    </label>
+
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveModuleForContent(null)}
+                                        className="btn btn-outline text-xs px-2.5 py-1"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSaveExtraContent(m.id)}
+                                        disabled={savingExtraContent || !extraContent.trim()}
+                                        className="btn btn-primary text-xs px-3 py-1 font-semibold cursor-pointer"
+                                      >
+                                        {savingExtraContent ? 'Saving...' : 'Save Content'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}
