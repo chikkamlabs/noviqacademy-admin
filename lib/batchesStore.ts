@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 
 export type BatchRegistrationStatus = 'open' | 'closed';
 export type BatchLanguage = 'english' | 'telugu';
+export type BatchRegion = 'india' | 'uk';
 
 export interface Batch {
   id: string;
@@ -17,6 +18,7 @@ export interface Batch {
   from_time?: string | null;
   to_time?: string | null;
   language: BatchLanguage;
+  region: BatchRegion;
   created_at?: string;
   updated_at?: string;
   // Augmented display fields
@@ -39,6 +41,7 @@ export interface CreateBatchInput {
   from_time?: string | null;
   to_time?: string | null;
   language?: BatchLanguage;
+  region?: BatchRegion;
 }
 
 export interface UpdateBatchInput {
@@ -51,6 +54,7 @@ export interface UpdateBatchInput {
   from_time?: string | null;
   to_time?: string | null;
   language?: BatchLanguage;
+  region?: BatchRegion;
 }
 
 export interface CourseOptionForBatch {
@@ -322,6 +326,7 @@ export async function createBatch(
           from_time: input.from_time || null,
           to_time: input.to_time || null,
           language: input.language || 'english',
+          region: input.region || 'india',
         },
       ])
       .select()
@@ -358,6 +363,7 @@ export async function updateBatch(
     if (updates.from_time !== undefined) payload.from_time = updates.from_time || null;
     if (updates.to_time !== undefined) payload.to_time = updates.to_time || null;
     if (updates.language !== undefined) payload.language = updates.language;
+    if (updates.region !== undefined) payload.region = updates.region;
 
     const { error } = await supabase
       .from('batches')

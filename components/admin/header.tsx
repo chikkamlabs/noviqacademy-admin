@@ -13,8 +13,8 @@ export default function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
   const router = useRouter();
 
   const handleToggle = () => {
-    // Button won't work for desktop (as desktop sidebar is sticky)
-    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+    // Only desktop (>= 1024px) has permanently docked sidebar
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
       return;
     }
 
@@ -36,16 +36,16 @@ export default function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 h-16 w-full bg-[var(--color-surface)] border-b border-[#E5DFD3] px-3 md:px-6 flex items-center justify-between">
+    <header className="sticky top-0 z-50 h-16 w-full bg-[var(--color-surface)] border-b border-[#E5DFD3] px-3 md:px-6 flex items-center justify-between">
       {/* Left Section: Sidebar Toggle Button + Logo + Bold Noviq Academy Heading */}
       <div className="flex items-center gap-2.5 md:gap-3.5">
-        {/* Toggle Button: functional on mobile, disabled/non-working on desktop */}
+        {/* Toggle Button: functional on all non-desktop screens, hidden on desktop */}
         <button
           type="button"
           onClick={handleToggle}
           aria-label="Toggle sidebar"
-          className="p-2 rounded-[var(--radius-md)] text-[var(--color-text-primary)] hover:bg-[var(--color-soft-cream)] transition md:opacity-40 md:cursor-default cursor-pointer"
-          title="Toggle sidebar (Mobile only)"
+          className="p-2 rounded-[var(--radius-md)] text-[var(--color-text-primary)] hover:bg-[var(--color-soft-cream)] transition lg:hidden cursor-pointer"
+          title="Toggle menu"
         >
           <Menu className="w-5 h-5" />
         </button>

@@ -61,23 +61,23 @@ export default function AdminSidebar({
 
   return (
     <>
-      {/* Mobile Backdrop Overlay - closes sidebar on tap */}
+      {/* Backdrop Overlay - closes sidebar on tap on all non-desktop screens */}
       {isSidebarOpen && (
         <div
           onClick={handleClose}
-          className="fixed inset-0 bg-[#0A0A0A]/50 z-40 md:hidden backdrop-blur-xs transition-opacity"
+          className="fixed inset-0 top-16 bg-[#0A0A0A]/50 z-40 lg:hidden backdrop-blur-xs transition-opacity"
           aria-label="Close sidebar backdrop"
         />
       )}
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-50 md:z-30 h-screen w-64 md:w-64 bg-[var(--color-surface)] border-r border-[#E5DFD3] flex flex-col transition-transform duration-200 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        className={`fixed lg:sticky top-16 left-0 z-40 lg:z-30 h-[calc(100vh-4rem)] w-64 bg-[var(--color-surface)] border-r border-[#E5DFD3] flex flex-col transition-transform duration-200 ease-in-out shrink-0 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {/* Mobile Header with close button */}
-        <div className="flex md:hidden items-center justify-between p-4 border-b border-[#E5DFD3]">
+        {/* Header with close button (shown on non-desktop screens) */}
+        <div className="flex lg:hidden items-center justify-between p-4 border-b border-[#E5DFD3]">
           <span className="font-bold text-base text-[var(--color-text-primary)]">
             Admin Menu
           </span>

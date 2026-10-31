@@ -28,6 +28,7 @@ import {
   Phone,
   MapPin,
   FileText,
+  Tag,
 } from 'lucide-react';
 
 function OpenRegistrationContent() {
@@ -156,37 +157,20 @@ function OpenRegistrationContent() {
         </div>
       </div>
 
-      {/* Main Banner Card */}
-      <div className="card p-6 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-xl)] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-[var(--color-soft-orange)]/60 text-[var(--color-text-primary)] font-bold text-xl flex items-center justify-center shrink-0">
-            <ClipboardList className="w-7 h-7 text-[var(--color-tangerine)]" />
+      {/* First Block: Only Registration Number and Statuses */}
+      <div className="card px-5 py-3.5 sm:py-4 bg-[var(--color-surface)] border border-[#D5CDBD] rounded-[var(--radius-xl)] shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-[var(--radius-md)] bg-[var(--color-primary-subtle)] flex items-center justify-center text-[var(--color-tangerine)] shrink-0">
+            <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">
-                {detail.registration_id}
-              </h1>
+          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+            <h1 className="text-base sm:text-lg md:text-xl font-bold font-mono text-[var(--color-text-primary)]">
+              {detail.registration_id}
+            </h1>
+            <div className="flex items-center gap-2 flex-wrap">
               {getStatusBadge(detail.status)}
               {getPaymentStatusBadge(detail.payment_status)}
             </div>
-            <p className="text-xs text-[var(--color-text-muted)] mt-1 flex items-center gap-2">
-              <span>Learner: <strong className="text-[var(--color-text-primary)]">{detail.learner_name}</strong></span>
-              <span>•</span>
-              <span>Enrolled in <strong className="text-[var(--color-text-primary)]">[{detail.course_identifier}] {detail.course_title}</strong></span>
-            </p>
-          </div>
-        </div>
-
-        <div className="text-right self-start md:self-auto bg-[var(--color-soft-cream)] p-3 px-4 rounded-[var(--radius-lg)] border border-[#E5DFD3]">
-          <div className="text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">
-            Registration Fee
-          </div>
-          <div className="text-2xl font-bold text-[var(--color-text-primary)] mt-0.5">
-            ₹{detail.amount.toFixed(2)}
-          </div>
-          <div className="text-[11px] text-[var(--color-text-muted)]">
-            Currency: {detail.currency}
           </div>
         </div>
       </div>
@@ -289,7 +273,7 @@ function OpenRegistrationContent() {
         </div>
       </div>
 
-      {/* Section 3: Registration Record Metadata */}
+      {/* Section 3: Registration Record Details */}
       <div className="card bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-xl)] shadow-sm overflow-hidden">
         <div className="p-4 px-6 border-b border-[#E5DFD3] bg-[var(--color-soft-cream)]/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -298,36 +282,112 @@ function OpenRegistrationContent() {
               Registration Record Details
             </h2>
           </div>
-          <span className="text-[11px] text-[var(--color-text-muted)]">System timestamps & identifiers</span>
+          <span className="text-[11px] text-[var(--color-text-muted)]">Pricing & enrollment breakdown</span>
         </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-          <div className="p-3 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3]">
+        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 text-xs">
+          {/* Course Price */}
+          <div className="p-3.5 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3] flex flex-col justify-between">
+            <div className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">
+              Course Price
+            </div>
+            <div className="text-sm sm:text-base font-bold text-[var(--color-text-primary)] mt-1.5 flex items-baseline gap-2 flex-wrap">
+              <span>
+                {detail.course_selling_price != null
+                  ? `${detail.currency === 'GBP' ? '£' : '₹'}${detail.course_selling_price.toFixed(2)}`
+                  : detail.course_price != null
+                  ? `${detail.currency === 'GBP' ? '£' : '₹'}${detail.course_price.toFixed(2)}`
+                  : 'N/A'}
+              </span>
+              {detail.course_price != null &&
+                detail.course_selling_price != null &&
+                detail.course_price > detail.course_selling_price && (
+                  <span className="text-xs text-[var(--color-text-muted)] line-through font-normal">
+                    {detail.currency === 'GBP' ? '£' : '₹'}{detail.course_price.toFixed(2)}
+                  </span>
+                )}
+            </div>
+          </div>
+
+          {/* Registration Amount */}
+          <div className="p-3.5 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3] flex flex-col justify-between">
+            <div className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">
+              Registration Amount
+            </div>
+            <div className="text-sm sm:text-base font-bold text-[var(--color-tangerine)] mt-1.5">
+              {detail.currency === 'GBP' ? '£' : '₹'}{detail.amount.toFixed(2)}
+              <span className="text-[10px] text-[var(--color-text-muted)] font-normal ml-1">
+                ({detail.currency})
+              </span>
+            </div>
+          </div>
+
+          {/* Coupon Code (if any) */}
+          <div className="p-3.5 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3] flex flex-col justify-between">
+            <div className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold flex items-center gap-1">
+              <Tag className="w-3 h-3 text-[var(--color-tangerine)]" />
+              <span>Coupon Code</span>
+            </div>
+            <div className="text-sm sm:text-base font-mono font-bold mt-1.5">
+              {detail.coupon_code ? (
+                <span className="inline-flex items-center text-[var(--color-tangerine)] bg-[var(--color-primary-subtle)] px-2 py-0.5 rounded-[var(--radius-sm)] border border-[var(--color-tangerine)]/25">
+                  {detail.coupon_code}
+                </span>
+              ) : (
+                <span className="text-[var(--color-text-muted)] font-normal italic">None</span>
+              )}
+            </div>
+          </div>
+
+          {/* Discount (if any) */}
+          <div className="p-3.5 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3] flex flex-col justify-between">
+            <div className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">
+              Discount
+            </div>
+            <div className="text-sm sm:text-base font-bold mt-1.5">
+              {detail.discount && Number(detail.discount) > 0 ? (
+                <span className="text-emerald-600">
+                  -{detail.currency === 'GBP' ? '£' : '₹'}{Number(detail.discount).toFixed(2)}
+                </span>
+              ) : (
+                <span className="text-[var(--color-text-muted)] font-normal italic">None</span>
+              )}
+            </div>
+          </div>
+
+          {/* Registration ID */}
+          <div className="p-3.5 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3]">
             <div className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">
               Registration ID
             </div>
-            <div className="font-mono font-bold text-sm text-[var(--color-text-primary)] mt-1">
+            <div className="font-mono font-bold text-xs sm:text-sm text-[var(--color-text-primary)] mt-1.5 truncate">
               {detail.registration_id}
             </div>
           </div>
-          <div className="p-3 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3]">
+
+          {/* Enrollment Status */}
+          <div className="p-3.5 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3]">
             <div className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">
               Enrollment Status
             </div>
-            <div className="mt-1">{getStatusBadge(detail.status)}</div>
+            <div className="mt-1.5">{getStatusBadge(detail.status)}</div>
           </div>
-          <div className="p-3 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3]">
+
+          {/* Registered On */}
+          <div className="p-3.5 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3]">
             <div className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">
               Registered On
             </div>
-            <div className="font-medium text-[var(--color-text-primary)] mt-1">
+            <div className="font-medium text-[var(--color-text-primary)] mt-1.5 text-xs">
               {new Date(detail.created_at).toLocaleString()}
             </div>
           </div>
-          <div className="p-3 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3]">
+
+          {/* Last Updated */}
+          <div className="p-3.5 bg-[var(--color-soft-cream)]/60 rounded-[var(--radius-md)] border border-[#E5DFD3]">
             <div className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wider font-semibold">
               Last Updated
             </div>
-            <div className="font-medium text-[var(--color-text-primary)] mt-1">
+            <div className="font-medium text-[var(--color-text-primary)] mt-1.5 text-xs">
               {new Date(detail.updated_at).toLocaleString()}
             </div>
           </div>

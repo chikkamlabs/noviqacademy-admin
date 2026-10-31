@@ -13,6 +13,7 @@ interface AddCouponProps {
 export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponProps) {
   const [code, setCode] = useState<string>('');
   const [discountValue, setDiscountValue] = useState<number | ''>('');
+  const [ukDiscountValue, setUkDiscountValue] = useState<number | ''>('');
   const [validTill, setValidTill] = useState<string>('');
   const [thersold, setThersold] = useState<number | ''>('');
   const [isPublic, setIsPublic] = useState<boolean>(false);
@@ -34,7 +35,12 @@ export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponP
     }
 
     if (discountValue === '' || Number(discountValue) < 0) {
-      setErrorMessage('Please enter a valid discount value (greater than or equal to 0).');
+      setErrorMessage('Please enter a valid India discount value (greater than or equal to 0).');
+      return;
+    }
+
+    if (ukDiscountValue !== '' && Number(ukDiscountValue) < 0) {
+      setErrorMessage('UK discount value cannot be negative.');
       return;
     }
 
@@ -49,6 +55,7 @@ export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponP
       const result = await createCoupon({
         code: cleanCode,
         discount_value: Number(discountValue),
+        uk_discount_value: ukDiscountValue === '' ? 0 : Number(ukDiscountValue),
         valid_till: validTill ? new Date(validTill).toISOString() : null,
         thersold: Number(thersold),
         is_public: isPublic,
@@ -63,6 +70,7 @@ export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponP
       // Success
       setCode('');
       setDiscountValue('');
+      setUkDiscountValue('');
       setValidTill('');
       setThersold('');
       setIsPublic(false);
@@ -77,7 +85,7 @@ export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponP
 
   return (
     <div className="dialog-overlay p-4">
-      <div className="dialog-content max-w-lg w-full bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-xl)] shadow-xl overflow-hidden">
+      <div className="dialog-content max-w-lg w-full bg-[var(--color-surface)] border border-[#D5CDBD] rounded-[var(--radius-xl)] shadow-xl overflow-hidden">
         {/* Modal Header */}
         <div className="dialog-header flex items-center justify-between p-5 border-b border-[#E5DFD3]">
           <div className="flex items-center gap-2.5">
@@ -124,28 +132,47 @@ export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponP
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="e.g. NOVIQ50, FESTIVE100"
-                className="input-base font-mono font-bold tracking-wider uppercase border-[#E5DFD3]"
+                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm font-mono font-bold tracking-wider uppercase text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
               />
               <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
                 Unique uppercase alphanumeric identifier.
               </p>
             </div>
 
-            {/* Discount Value */}
-            <div className="form-group">
-              <label className="form-label text-xs font-semibold text-[var(--color-text-primary)] mb-1">
-                Discount Value (Amount / ₹) <span className="text-[var(--color-tangerine)]">*</span>
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={discountValue}
-                onChange={(e) => setDiscountValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                placeholder="e.g. 500.00"
-                className="input-base border-[#E5DFD3]"
-              />
+            {/* Discounts Grid (India & UK) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* India Discount Value */}
+              <div className="form-group">
+                <label className="form-label text-xs font-semibold text-[var(--color-text-primary)] mb-1">
+                  Discount Value (INR / ₹) <span className="text-[var(--color-tangerine)]">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  placeholder="e.g. 500.00"
+                  className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
+                />
+              </div>
+
+              {/* UK Discount Value */}
+              <div className="form-group">
+                <label className="form-label text-xs font-semibold text-[var(--color-text-primary)] mb-1">
+                  UK Discount Value (GBP / £)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={ukDiscountValue}
+                  onChange={(e) => setUkDiscountValue(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  placeholder="e.g. 10.00"
+                  className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
+                />
+              </div>
             </div>
 
             {/* Valid Till (Expiry) */}
@@ -157,7 +184,7 @@ export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponP
                 type="datetime-local"
                 value={validTill}
                 onChange={(e) => setValidTill(e.target.value)}
-                className="input-base border-[#E5DFD3]"
+                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
               />
               <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
                 Leave empty for no expiration date.
@@ -176,7 +203,7 @@ export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponP
                 value={thersold}
                 onChange={(e) => setThersold(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                 placeholder="e.g. 100 (enter 0 for unlimited)"
-                className="input-base border-[#E5DFD3]"
+                className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3.5 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none transition"
               />
               <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
                 Maximum number of times this coupon can be redeemed.
@@ -185,7 +212,7 @@ export default function AddCoupon({ isOpen, onClose, onCouponAdded }: AddCouponP
 
             {/* Is Public Toggle */}
             <div className="pt-2">
-              <label className="flex items-start gap-3 p-3.5 bg-[var(--color-soft-cream)]/70 border border-[#E5DFD3] rounded-[var(--radius-lg)] cursor-pointer hover:bg-[var(--color-soft-cream)] transition">
+              <label className="flex items-start gap-3 p-3.5 bg-[var(--color-soft-cream)]/70 border border-[#D5CDBD] rounded-[var(--radius-lg)] cursor-pointer hover:bg-[var(--color-soft-cream)] transition">
                 <input
                   type="checkbox"
                   checked={isPublic}

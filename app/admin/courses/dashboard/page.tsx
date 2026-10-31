@@ -91,46 +91,35 @@ export default function CoursesDashboardPage() {
               </Link>
             </div>
 
-            {/* Stat & Search Bar Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Total Courses Metric Card */}
-              <div className="card p-5 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm flex items-center justify-between">
-                <div>
-                  <div className="text-xs uppercase font-bold tracking-wider text-[var(--color-text-muted)]">
-                    Total Courses
-                  </div>
-                  <div className="text-3xl font-extrabold text-[var(--color-text-primary)] mt-1">
-                    {totalCount}
-                  </div>
-                </div>
-                <div className="p-3 rounded-[var(--radius-md)] bg-[var(--color-primary-subtle)] text-[var(--color-tangerine)]">
-                  <BookOpen className="w-6 h-6" />
-                </div>
+            {/* Compact Stat & Search Bar Section */}
+            <div className="card px-3.5 py-2 md:py-2.5 bg-[var(--color-surface)] border border-[#D5CDBD] rounded-[var(--radius-lg)] shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              {/* Total courses: count then small icon */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] bg-[var(--color-soft-cream)] border border-[#E5DFD3] shrink-0 self-start sm:self-auto">
+                <span className="font-semibold text-xs sm:text-sm md:text-base text-[var(--color-text-primary)]">
+                  Total courses : <span className="font-bold text-[var(--color-tangerine)] text-xs sm:text-sm md:text-base">{totalCount}</span>
+                </span>
+                <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--color-tangerine)] shrink-0" />
               </div>
 
               {/* Search Bar for course_id */}
-              <div className="card md:col-span-2 p-5 bg-[var(--color-surface)] border border-[#E5DFD3] rounded-[var(--radius-lg)] shadow-sm flex flex-col justify-center">
-                <form onSubmit={handleSearch} className="flex gap-2 w-full">
-                  <div className="flex items-center w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] focus-within:border-[var(--color-tangerine)] focus-within:ring-2 focus-within:ring-[var(--color-primary-subtle)] transition">
-                    <div className="pl-3.5 pr-2 text-[var(--color-text-muted)] flex items-center justify-center shrink-0">
-                      <Search className="w-4 h-4" />
-                    </div>
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      placeholder="Search by course_id (e.g., course_101)..."
-                      className="w-full bg-transparent py-2 pr-3 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none border-none"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="btn btn-primary px-4 py-2 text-sm font-semibold rounded-[var(--radius-md)] cursor-pointer shrink-0"
-                  >
-                    Search
-                  </button>
-                </form>
-              </div>
+              <form onSubmit={handleSearch} className="flex items-center gap-2 flex-1 sm:max-w-md w-full">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder="Search by course_id (e.g., course_101)..."
+                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] pl-9 pr-3 py-1 sm:py-1.5 text-xs sm:text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="btn btn-primary px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold rounded-[var(--radius-md)] cursor-pointer shrink-0"
+                >
+                  Search
+                </button>
+              </form>
             </div>
 
             {/* Courses Table / List Display */}

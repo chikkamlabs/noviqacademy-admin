@@ -24,6 +24,8 @@ export interface RegistrationSummary {
   amount: number;
   currency: string;
   status: RegistrationStatus;
+  coupon_code?: string | null;
+  discount?: number | null;
   created_at: string;
   updated_at: string;
 
@@ -38,6 +40,8 @@ export interface RegistrationSummary {
   course_id: string;
   course_identifier: string; // e.g. course_101
   course_title: string;
+  course_price?: number | null;
+  course_selling_price?: number | null;
 
   // Batch details
   batch_id: string;
@@ -293,7 +297,7 @@ export async function getRegistrationDetails(
 
     // Parallel detail queries
     const [courseRes, batchRes, userRes, profileRes, paymentsRes] = await Promise.all([
-      reg.course_id ? supabase.from('courses').select('id, course_id, title').eq('id', reg.course_id).maybeSingle() : Promise.resolve({ data: null }),
+      reg.course_id ? supabase.from('courses').select('id, course_id, title, price, selling_price, uk_price, uk_selling_price').eq('id', reg.course_id).maybeSingle() : Promise.resolve({ data: null }),
       reg.batch_id ? supabase.from('batches').select('id, batch_id, language, from_time, to_time, start_date, end_date, notes').eq('id', reg.batch_id).maybeSingle() : Promise.resolve({ data: null }),
       reg.learner_id ? supabase.from('users').select('id, name, email, mobile').eq('id', reg.learner_id).maybeSingle() : Promise.resolve({ data: null }),
       reg.learner_id ? supabase.from('learner_profile').select('id, region').eq('id', reg.learner_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -330,6 +334,8 @@ export async function getRegistrationDetails(
       amount: Number(reg.amount || 0),
       currency: reg.currency || 'INR',
       status: (reg.status as RegistrationStatus) || 'pending',
+      coupon_code: reg.coupon_code || null,
+      discount: reg.discount != null ? Number(reg.discount) : 0,
       created_at: reg.created_at,
       updated_at: reg.updated_at,
 
@@ -342,6 +348,8 @@ export async function getRegistrationDetails(
       course_id: reg.course_id,
       course_identifier: courseRes.data?.course_id || 'Unknown',
       course_title: courseRes.data?.title || 'Unknown Course',
+      course_price: courseRes.data?.price != null ? Number(courseRes.data.price) : null,
+      course_selling_price: courseRes.data?.selling_price != null ? Number(courseRes.data.selling_price) : null,
 
       batch_id: reg.batch_id,
       batch_identifier: b?.batch_id || 'Unknown',
