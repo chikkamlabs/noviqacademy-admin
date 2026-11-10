@@ -22,7 +22,6 @@ const navItems = [
   { label: 'Batches', href: '/mentor/batches/dashboard', icon: Layers },
   { label: 'Courses', href: '/mentor/courses', icon: BookOpen },
   { label: 'Profile', href: '/mentor/profile', icon: GraduationCap },
-  { label: 'Learners', href: '/mentor/dashboard', icon: Users },
 ];
 
 export default function MentorSidebar({
