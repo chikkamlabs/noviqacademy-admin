@@ -379,3 +379,116 @@ export async function updateBatch(
     return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
   }
 }
+
+export interface BatchLearnerItem {
+  id: string;
+  batch_id: string;
+  learner_id: string;
+  course_id: string;
+  points: number;
+  attendance: number;
+  name: string;
+  mobile: string;
+  email: string;
+  created_at?: string;
+}
+
+/**
+ * Fetch total count of learners registered/enrolled in a specific batch.
+ */
+export async function getBatchLearnersCount(batchId: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('batch_learners')
+      .select('*', { count: 'exact', head: true })
+      .eq('batch_id', batchId);
+
+    if (error) {
+      console.error('Error fetching batch learners count:', error);
+      return 0;
+    }
+
+    return count ?? 0;
+  } catch (err) {
+    console.error('Unexpected error fetching batch learners count:', err);
+    return 0;
+  }
+}
+
+/**
+ * Fetch learners for a batch, augmented with user profile details (name, mobile, email).
+ * Supports search filtering on mobile number or name.
+ */
+export async function getBatchLearners(
+  batchId: string,
+  searchQuery?: string
+): Promise<{ data: BatchLearnerItem[]; error: Error | null }> {
+  try {
+    // 1. Fetch batch_learners records
+    const { data: records, error } = await supabase
+      .from('batch_learners')
+      .select('*')
+      .eq('batch_id', batchId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      return { data: [], error: new Error(error.message) };
+    }
+
+    if (!records || records.length === 0) {
+      return { data: [], error: null };
+    }
+
+    // 2. Fetch user information for all learners
+    const learnerIds = Array.from(new Set(records.map((r) => r.learner_id)));
+    const { data: usersData, error: usersError } = await supabase
+      .from('users')
+      .select('id, name, mobile, email')
+      .in('id', learnerIds);
+
+    if (usersError) {
+      console.error('Error fetching user info for batch learners:', usersError);
+    }
+
+    const userMap = new Map<string, { name: string; mobile: string; email: string }>();
+    (usersData || []).forEach((u) => {
+      userMap.set(u.id, {
+        name: u.name || 'Unknown',
+        mobile: u.mobile || '—',
+        email: u.email || '—',
+      });
+    });
+
+    const items: BatchLearnerItem[] = records.map((r) => {
+      const u = userMap.get(r.learner_id);
+      return {
+        id: r.id,
+        batch_id: r.batch_id,
+        learner_id: r.learner_id,
+        course_id: r.course_id,
+        points: Number(r.points || 0),
+        attendance: Number(r.attendance || 0),
+        name: u?.name || 'Unknown Learner',
+        mobile: u?.mobile || '—',
+        email: u?.email || '—',
+        created_at: r.created_at,
+      };
+    });
+
+    // 3. Search filter by mobile number or name
+    let filtered = items;
+    if (searchQuery && searchQuery.trim() !== '') {
+      const term = searchQuery.trim().toLowerCase();
+      filtered = items.filter(
+        (l) =>
+          l.name.toLowerCase().includes(term) ||
+          l.mobile.toLowerCase().includes(term)
+      );
+    }
+
+    return { data: filtered, error: null };
+  } catch (err) {
+    return { data: [], error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
