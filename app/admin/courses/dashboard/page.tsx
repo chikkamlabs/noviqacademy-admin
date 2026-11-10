@@ -5,7 +5,7 @@ import Link from 'next/link';
 import AdminHeader from '@/components/admin/header';
 import AdminSidebar from '@/components/admin/sidebar';
 import { getCourses, getCoursesCount, Course, getMentorsList, MentorSummary } from '@/lib/coursesStore';
-import { Plus, Search, BookOpen, ExternalLink, Loader2, Star } from 'lucide-react';
+import { Plus, Search, BookOpen, ExternalLink, Loader2, Star, FolderOpen, FileText } from 'lucide-react';
 
 export default function CoursesDashboardPage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -233,15 +233,35 @@ export default function CoursesDashboardPage() {
                             )}
                           </td>
 
-                          {/* Open Button */}
+                          {/* Action Buttons: Resources & Open */}
                           <td className="py-3.5 px-4 text-right">
-                            <Link
-                              href={`/admin/courses/opencourse?id=${course.id}`}
-                              className="btn btn-outline inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-tangerine)] hover:border-[var(--color-tangerine)] border border-[#D5CDBD] transition"
-                            >
-                              <span>Open</span>
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </Link>
+                            <div className="flex items-center justify-end gap-2">
+                              <Link
+                                href={`/admin/courses/resources?course_id=${course.id}`}
+                                className="btn btn-outline inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold bg-[var(--color-soft-cream)] text-[var(--color-text-primary)] hover:border-[var(--color-tangerine)] hover:text-[var(--color-tangerine)] border border-[#D5CDBD] transition cursor-pointer"
+                                title="View Resources for this course"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5 text-[var(--color-tangerine)]" />
+                                <span>Resources</span>
+                              </Link>
+
+                              <Link
+                                href={`/admin/courses/exams?course_id=${course.id}`}
+                                className="btn btn-outline inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold bg-[var(--color-soft-cream)] text-[var(--color-text-primary)] hover:border-[var(--color-tangerine)] hover:text-[var(--color-tangerine)] border border-[#D5CDBD] transition cursor-pointer"
+                                title="View Exams for this course"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-[var(--color-tangerine)]" />
+                                <span>Exams</span>
+                              </Link>
+
+                              <Link
+                                href={`/admin/courses/opencourse?id=${course.id}`}
+                                className="btn btn-outline inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-tangerine)] hover:border-[var(--color-tangerine)] border border-[#D5CDBD] transition cursor-pointer"
+                              >
+                                <span>Open</span>
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}

@@ -19,6 +19,7 @@ import {
   Clock,
   BookOpen,
   GraduationCap,
+  Users,
 } from 'lucide-react';
 
 function formatTime(timeStr?: string | null): string {
@@ -290,15 +291,26 @@ export default function BatchesDashboardPage() {
                               </div>
                             </td>
 
-                            {/* Action: Open */}
+                            {/* Action: Learners & Open */}
                             <td className="table-data-cell py-3.5 px-4 text-right">
-                              <Link
-                                href={`/admin/batches/openbatch?id=${batch.id}`}
-                                className="btn btn-outline inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold hover:border-[var(--color-tangerine)] hover:text-[var(--color-tangerine)] transition cursor-pointer"
-                              >
-                                <span>Open</span>
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </Link>
+                              <div className="flex items-center justify-end gap-2">
+                                <Link
+                                  href={`/admin/batches/learners?batch_id=${batch.id}`}
+                                  className="btn btn-outline inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold bg-[var(--color-soft-cream)] text-[var(--color-text-primary)] hover:border-[var(--color-tangerine)] hover:text-[var(--color-tangerine)] border border-[#D5CDBD] transition cursor-pointer"
+                                  title="View Learners for this batch"
+                                >
+                                  <Users className="w-3.5 h-3.5 text-[var(--color-tangerine)]" />
+                                  <span>Learners</span>
+                                </Link>
+
+                                <Link
+                                  href={`/admin/batches/openbatch?id=${batch.id}`}
+                                  className="btn btn-outline inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold hover:border-[var(--color-tangerine)] hover:text-[var(--color-tangerine)] transition cursor-pointer"
+                                >
+                                  <span>Open</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </Link>
+                              </div>
                             </td>
                           </tr>
                         );

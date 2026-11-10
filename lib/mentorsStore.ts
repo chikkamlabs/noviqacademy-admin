@@ -385,3 +385,59 @@ export async function updateMentorPassword(
     return { error: err instanceof Error ? err : new Error(String(err)) };
   }
 }
+
+/**
+ * Fetch the currently authenticated mentor's full profile details.
+ */
+export async function getCurrentMentorProfile(): Promise<{ data: Mentor | null; error: Error | null }> {
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      return { data: null, error: authError ? new Error(authError.message) : new Error('Not authenticated') };
+    }
+
+    return getMentorById(authData.user.id);
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
+/**
+ * Change the logged-in mentor's password using Supabase Auth updateUser API.
+ */
+export async function changeOwnMentorPassword(
+  newPassword: string
+): Promise<{ error: Error | null }> {
+  try {
+    if (!newPassword || newPassword.length < 6) {
+      return { error: new Error('Password must be at least 6 characters long.') };
+    }
+
+    // 1. Native Supabase client-side self password update
+    const { error: authError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (!authError) {
+      return { error: null };
+    }
+
+    // 2. Fallback: Try with RPC if authenticated user has admin role or function exists
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData?.user?.id) {
+      const { error: rpcError } = await supabase.rpc('admin_update_user_password', {
+        p_user_id: userData.user.id,
+        p_new_password: newPassword,
+      });
+
+      if (!rpcError) {
+        return { error: null };
+      }
+    }
+
+    return { error: new Error(authError.message) };
+  } catch (err) {
+    return { error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
