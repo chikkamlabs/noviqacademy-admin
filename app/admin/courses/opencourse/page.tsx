@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import AdminHeader from '@/components/admin/header';
 import AdminSidebar from '@/components/admin/sidebar';
 import {
   getCourses,
   getCourseById,
   updateCourse,
+  uploadCoursePreviewImage,
   getMentorsList,
   getAllTopics,
   createTopic,
@@ -47,7 +49,21 @@ import {
   Edit2,
   Save,
   X,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
+
+function isDisplayableImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  return (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('/')
+  );
+}
 
 function OpenCourseContent() {
   const router = useRouter();
@@ -68,6 +84,9 @@ function OpenCourseContent() {
   const [duration, setDuration] = useState<number>(30);
   const [mentorId, setMentorId] = useState<string>('');
   const [previewMediaId, setPreviewMediaId] = useState<string>('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<CourseStatus>('active');
   const [isFeatured, setIsFeatured] = useState<boolean>(false);
 
@@ -171,7 +190,9 @@ function OpenCourseContent() {
       setUkSellingPrice(c.uk_selling_price || 0);
       setDuration(c.duration || 0);
       setMentorId(c.mentor_id || '');
-      setPreviewMediaId(c.preview_media_id || '');
+      setPreviewMediaId(c.courses_media_id || c.preview_media_id || '');
+      setImageFile(null);
+      setLocalPreviewUrl(null);
       setStatus(c.status || 'deactivated');
       setIsFeatured(Boolean(c.is_featured));
       setCourseLearnings(Array.isArray(c.course_learnings) ? c.course_learnings : []);
@@ -184,6 +205,38 @@ function OpenCourseContent() {
       await loadModulesData(c.id);
     }
   }, [loadTopicsData, loadModulesData]);
+
+  useEffect(() => {
+    return () => {
+      if (localPreviewUrl && localPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(localPreviewUrl);
+      }
+    };
+  }, [localPreviewUrl]);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('Please select a valid image file (PNG, JPG, WEBP, etc.).');
+      e.target.value = '';
+      return;
+    }
+
+    setErrorMessage(null);
+    setImageFile(file);
+    setLocalPreviewUrl(URL.createObjectURL(file));
+    e.target.value = '';
+  };
+
+  const handleCancelImageChange = () => {
+    setImageFile(null);
+    setLocalPreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // Initial Data Load
   useEffect(() => {
@@ -263,6 +316,18 @@ function OpenCourseContent() {
 
     setUpdating(true);
 
+    let nextMediaUrl = previewMediaId.trim() || null;
+
+    if (imageFile) {
+      const uploadRes = await uploadCoursePreviewImage(imageFile);
+      if (uploadRes.error || !uploadRes.publicUrl) {
+        setErrorMessage(uploadRes.error?.message || 'Failed to upload course preview image.');
+        setUpdating(false);
+        return;
+      }
+      nextMediaUrl = uploadRes.publicUrl;
+    }
+
     const result = await updateCourse(course.id, {
       title: title.trim(),
       sub_heading: subHeading.trim() || null,
@@ -273,7 +338,8 @@ function OpenCourseContent() {
       uk_selling_price: Number(ukSellingPrice),
       duration: Number(duration),
       mentor_id: mentorId || null,
-      preview_media_id: previewMediaId.trim() || null,
+      courses_media_id: nextMediaUrl,
+      preview_media_id: nextMediaUrl,
       course_learnings: courseLearnings,
       course_includes: courseIncludes,
       status,
@@ -286,6 +352,14 @@ function OpenCourseContent() {
       return;
     }
 
+    if (result.data) {
+      setCourse(result.data);
+      setPreviewMediaId(result.data.courses_media_id || result.data.preview_media_id || nextMediaUrl || '');
+    } else if (nextMediaUrl) {
+      setPreviewMediaId(nextMediaUrl);
+    }
+    setImageFile(null);
+    setLocalPreviewUrl(null);
     setSuccessMessage(`Course "${result.data?.title}" updated successfully.`);
     setUpdating(false);
   };
@@ -748,20 +822,6 @@ function OpenCourseContent() {
                   />
                 </div>
 
-                {/* Preview Media ID */}
-                <div className="form-group mb-0">
-                  <label htmlFor="editPreviewMediaId" className="form-label mb-1">
-                    Preview Media ID / URL
-                  </label>
-                  <input
-                    id="editPreviewMediaId"
-                    type="text"
-                    value={previewMediaId}
-                    onChange={(e) => setPreviewMediaId(e.target.value)}
-                    className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
-                  />
-                </div>
-
                 {/* Mentor Assignment */}
                 <div className="form-group md:col-span-2 mb-0">
                   <label htmlFor="editMentorId" className="form-label mb-1">
@@ -799,7 +859,7 @@ function OpenCourseContent() {
                 </div>
 
                 {/* Is Featured */}
-                <div className="form-group mb-0 flex items-center pt-6 gap-2">
+                <div className="form-group md:col-span-3 mb-0 flex items-center pt-2 gap-2">
                   <input
                     id="editFeatured"
                     type="checkbox"
@@ -810,6 +870,88 @@ function OpenCourseContent() {
                   <label htmlFor="editFeatured" className="text-sm font-semibold text-[var(--color-text-primary)] cursor-pointer">
                     Featured Course
                   </label>
+                </div>
+
+                {/* Course Preview Image */}
+                <div className="form-group md:col-span-3 mb-0 pt-2">
+                  <label className="form-label mb-1.5">
+                    Course Preview Image
+                  </label>
+                  <input
+                    ref={fileInputRef}
+                    id="editCoursePreviewImage"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+
+                  {(() => {
+                    const activeImageUrl = localPreviewUrl || previewMediaId;
+                    if (isDisplayableImageUrl(activeImageUrl)) {
+                      return (
+                        <div className="space-y-3">
+                          <div className="relative w-full sm:w-96 h-52 rounded-[var(--radius-md)] overflow-hidden border border-[#D5CDBD] bg-[var(--color-soft-cream)]">
+                            <Image
+                              src={activeImageUrl}
+                              alt={title || 'Course preview'}
+                              fill
+                              className="object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="btn btn-outline inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] cursor-pointer"
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Change Image</span>
+                            </button>
+                            {imageFile && (
+                              <button
+                                type="button"
+                                onClick={handleCancelImageChange}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] text-red-600 hover:bg-red-50 border border-red-200 cursor-pointer transition"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>Revert Change</span>
+                              </button>
+                            )}
+                            {imageFile && (
+                              <span className="text-[11px] text-[var(--color-text-muted)]">
+                                New file: {imageFile.name} (uploads on Update Course)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-2">
+                        {previewMediaId && (
+                          <p className="text-xs text-[var(--color-text-muted)]">
+                            Current value: <span className="font-mono">{previewMediaId}</span>
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="w-full sm:w-96 h-40 rounded-[var(--radius-md)] border-2 border-dashed border-[#D5CDBD] hover:border-[var(--color-tangerine)] bg-[var(--color-soft-cream)]/60 flex flex-col items-center justify-center gap-2 text-[var(--color-text-secondary)] hover:text-[var(--color-tangerine)] transition cursor-pointer"
+                        >
+                          <ImageIcon className="w-7 h-7" />
+                          <span className="text-xs font-semibold">
+                            {previewMediaId ? 'Click to Upload & Replace Course Image' : 'Click to Upload Course Image'}
+                          </span>
+                          <span className="text-[11px] text-[var(--color-text-muted)]">
+                            No preview image uploaded yet
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

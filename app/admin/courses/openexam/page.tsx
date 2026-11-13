@@ -10,6 +10,8 @@ import {
   getExamById,
   updateCourseExam,
   deleteQuestionFromExam,
+  updateQuestionInExam,
+  UpdateChoiceInput,
   FullCourseExam,
   ExamQuestion,
 } from '@/lib/courseexamsStore';
@@ -27,6 +29,8 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
+  Edit2,
+  X,
 } from 'lucide-react';
 
 function OpenExamContent() {
@@ -51,6 +55,15 @@ function OpenExamContent() {
   // Add Question modal
   const [isAddQuestionOpen, setIsAddQuestionOpen] = useState(false);
   const [deletingQuestionId, setDeletingQuestionId] = useState<string | null>(null);
+
+  // Edit Question state
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [editQText, setEditQText] = useState('');
+  const [editQDescription, setEditQDescription] = useState('');
+  const [editQHint, setEditQHint] = useState('');
+  const [editQChoices, setEditQChoices] = useState<UpdateChoiceInput[]>([]);
+  const [editQAnswerIndex, setEditQAnswerIndex] = useState<number>(0);
+  const [savingQuestionId, setSavingQuestionId] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -194,6 +207,125 @@ function OpenExamContent() {
       });
       setSuccessMsg('New question added successfully.');
       setTimeout(() => setSuccessMsg(null), 3000);
+    }
+  };
+
+  const startEditQuestion = (q: ExamQuestion, idx: number) => {
+    const existingChoices = q.choices || [];
+    const mappedChoices: UpdateChoiceInput[] =
+      existingChoices.length >= 2
+        ? existingChoices.map((c) => ({ id: c.id, choice: c.choice }))
+        : [
+            ...existingChoices.map((c) => ({ id: c.id, choice: c.choice })),
+            ...Array.from({ length: Math.max(0, 2 - existingChoices.length) }, () => ({
+              choice: '',
+            })),
+          ];
+
+    const ansIdx = existingChoices.findIndex((c) => c.id === q.answer);
+
+    setEditingQuestionId(q.id);
+    setEditQText(q.question || '');
+    setEditQDescription(q.description || '');
+    setEditQHint(q.hint || '');
+    setEditQChoices(mappedChoices);
+    setEditQAnswerIndex(ansIdx >= 0 ? ansIdx : 0);
+    setExpandedIndices((prev) => ({ ...prev, [idx]: true }));
+    setErrorMsg(null);
+  };
+
+  const cancelEditQuestion = () => {
+    setEditingQuestionId(null);
+    setEditQText('');
+    setEditQDescription('');
+    setEditQHint('');
+    setEditQChoices([]);
+    setEditQAnswerIndex(0);
+  };
+
+  const handleEditChoiceText = (cIdx: number, val: string) => {
+    setEditQChoices((prev) =>
+      prev.map((c, i) => (i === cIdx ? { ...c, choice: val } : c))
+    );
+  };
+
+  const handleAddEditChoiceSlot = () => {
+    setEditQChoices((prev) => [...prev, { choice: '' }]);
+  };
+
+  const handleRemoveEditChoiceSlot = (cIdx: number) => {
+    if (editQChoices.length <= 2) {
+      setErrorMsg('A question must have at least 2 choices.');
+      return;
+    }
+    setEditQChoices((prev) => prev.filter((_, i) => i !== cIdx));
+    if (editQAnswerIndex === cIdx) {
+      setEditQAnswerIndex(0);
+    } else if (editQAnswerIndex > cIdx) {
+      setEditQAnswerIndex((prev) => prev - 1);
+    }
+  };
+
+  const handleSaveQuestionUpdate = async (questionId: string, qIndex: number) => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!editQText.trim()) {
+      setErrorMsg(`Question ${qIndex + 1} text cannot be empty.`);
+      return;
+    }
+
+    const cleanedChoices = editQChoices.map((c) => ({
+      id: c.id,
+      choice: c.choice.trim(),
+    }));
+
+    if (cleanedChoices.length < 2) {
+      setErrorMsg(`Question ${qIndex + 1} must have at least 2 choices.`);
+      return;
+    }
+
+    if (cleanedChoices.some((c) => !c.choice)) {
+      setErrorMsg(`All choices in Question ${qIndex + 1} must be filled in.`);
+      return;
+    }
+
+    if (editQAnswerIndex < 0 || editQAnswerIndex >= cleanedChoices.length) {
+      setErrorMsg(`Please select a valid correct answer for Question ${qIndex + 1}.`);
+      return;
+    }
+
+    setSavingQuestionId(questionId);
+    try {
+      const { data: updatedQ, error } = await updateQuestionInExam(questionId, {
+        question: editQText.trim(),
+        description: editQDescription.trim() || null,
+        hint: editQHint.trim() || null,
+        choices: cleanedChoices,
+        answerIndex: editQAnswerIndex,
+      });
+
+      if (error || !updatedQ) {
+        setErrorMsg(error?.message || 'Failed to update question.');
+        return;
+      }
+
+      setExam((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          questions: (prev.questions || []).map((q) =>
+            q.id === questionId ? updatedQ : q
+          ),
+        };
+      });
+      cancelEditQuestion();
+      setSuccessMsg(`Question ${qIndex + 1} updated successfully.`);
+      setTimeout(() => setSuccessMsg(null), 3500);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Error updating question.');
+    } finally {
+      setSavingQuestionId(null);
     }
   };
 
@@ -439,6 +571,8 @@ function OpenExamContent() {
           <div className="space-y-3">
             {questionsList.map((q, idx) => {
               const isExpanded = !!expandedIndices[idx];
+              const isEditing = editingQuestionId === q.id;
+              const isSavingThis = savingQuestionId === q.id;
               const choices = q.choices || [];
               const correctChoice = choices.find((c) => c.id === q.answer);
 
@@ -475,6 +609,21 @@ function OpenExamContent() {
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
+                      {!isEditing && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditQuestion(q, idx);
+                          }}
+                          className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:text-[var(--color-tangerine)] hover:bg-[var(--color-soft-orange)]/25 transition cursor-pointer"
+                          title="Edit Question"
+                          aria-label={`Edit Question ${idx + 1}`}
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={(e) => {
@@ -506,65 +655,244 @@ function OpenExamContent() {
                   {/* Expanded view */}
                   {isExpanded && (
                     <div className="p-4 border-t border-[#E5DFD3] bg-[var(--color-surface)] space-y-3">
-                      {q.description && (
-                        <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--color-soft-cream)]/50 border border-[#E5DFD3] text-xs text-[var(--color-text-secondary)]">
-                          <span className="font-semibold block mb-0.5 text-[var(--color-text-primary)]">
-                            Description / Context:
-                          </span>
-                          {q.description}
-                        </div>
-                      )}
+                      {isEditing ? (
+                        <div className="space-y-3.5">
+                          {/* Editable Question */}
+                          <div>
+                            <label
+                              htmlFor={`edit_q_text_${q.id}`}
+                              className="block text-xs font-semibold text-[var(--color-text-primary)] mb-1"
+                            >
+                              Question <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                              id={`edit_q_text_${q.id}`}
+                              rows={2}
+                              value={editQText}
+                              onChange={(e) => setEditQText(e.target.value)}
+                              className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] p-2.5 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
+                            />
+                          </div>
 
-                      {q.hint && (
-                        <div className="flex items-start gap-1.5 text-xs text-[var(--color-tangerine)] bg-[var(--color-soft-orange)]/20 p-2 rounded-[var(--radius-sm)] border border-[var(--color-tangerine)]/20">
-                          <HelpCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                          <span>
-                            <strong className="font-semibold">Hint:</strong> {q.hint}
-                          </span>
-                        </div>
-                      )}
+                          {/* Editable Description */}
+                          <div>
+                            <label
+                              htmlFor={`edit_q_desc_${q.id}`}
+                              className="block text-xs font-semibold text-[var(--color-text-primary)] mb-1"
+                            >
+                              Description <span className="text-[11px] font-normal text-[var(--color-text-muted)]">(optional)</span>
+                            </label>
+                            <textarea
+                              id={`edit_q_desc_${q.id}`}
+                              rows={2}
+                              value={editQDescription}
+                              onChange={(e) => setEditQDescription(e.target.value)}
+                              placeholder="Additional context or code snippet..."
+                              className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] p-2.5 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
+                            />
+                          </div>
 
-                      {/* Choices list */}
-                      <div>
-                        <span className="text-xs font-semibold text-[var(--color-text-primary)] block mb-1.5">
-                          Choices (exam_q_choices) &amp; Verified Answer:
-                        </span>
-                        <div className="space-y-1.5">
-                          {choices.length === 0 ? (
-                            <span className="text-xs text-[var(--color-text-muted)] italic">
-                              No choices registered for this question.
-                            </span>
-                          ) : (
-                            choices.map((choice, cIdx) => {
-                              const isCorrect = choice.id === q.answer;
-                              return (
-                                <div
-                                  key={choice.id}
-                                  className={`flex items-center justify-between gap-2 p-2.5 rounded-[var(--radius-sm)] text-xs border ${
-                                    isCorrect
-                                      ? 'border-[var(--color-tangerine)] bg-[var(--color-soft-orange)]/25 font-semibold text-[var(--color-text-primary)]'
-                                      : 'border-[#E5DFD3] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-5 font-mono font-bold text-[var(--color-text-muted)]">
-                                      {String.fromCharCode(65 + cIdx)}.
-                                    </span>
-                                    <span>{choice.choice}</span>
+                          {/* Editable Hint */}
+                          <div>
+                            <label
+                              htmlFor={`edit_q_hint_${q.id}`}
+                              className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-primary)] mb-1"
+                            >
+                              <HelpCircle className="w-3.5 h-3.5 text-[var(--color-tangerine)]" />
+                              <span>Hint</span>
+                              <span className="text-[11px] font-normal text-[var(--color-text-muted)]">(optional)</span>
+                            </label>
+                            <input
+                              id={`edit_q_hint_${q.id}`}
+                              type="text"
+                              value={editQHint}
+                              onChange={(e) => setEditQHint(e.target.value)}
+                              placeholder="Helpful hint for learners..."
+                              className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
+                            />
+                          </div>
+
+                          {/* Editable Choices & Correct Answer */}
+                          <div className="pt-2 border-t border-[#E5DFD3]">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-semibold text-[var(--color-text-primary)]">
+                                Choices &amp; Correct Answer <span className="text-red-500">*</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleAddEditChoiceSlot}
+                                className="btn btn-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[var(--color-tangerine)] border-dashed border-[var(--color-tangerine)]/50 hover:bg-[var(--color-soft-orange)]/30 rounded-[var(--radius-md)] cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add Choice</span>
+                              </button>
+                            </div>
+
+                            <div className="space-y-2">
+                              {editQChoices.map((choiceObj, cIdx) => {
+                                const isCorrect = editQAnswerIndex === cIdx;
+                                return (
+                                  <div
+                                    key={choiceObj.id || `new_${cIdx}`}
+                                    className={`flex items-center gap-2 p-2 rounded-[var(--radius-sm)] text-xs border transition-all ${
+                                      isCorrect
+                                        ? 'border-[var(--color-tangerine)] bg-[var(--color-soft-orange)]/20'
+                                        : 'border-[#D5CDBD] bg-[var(--color-surface)]'
+                                    }`}
+                                  >
+                                    <label
+                                      htmlFor={`edit_q_${q.id}_choice_${cIdx}`}
+                                      className="flex items-center gap-1.5 cursor-pointer shrink-0 select-none"
+                                      title="Select as correct answer"
+                                    >
+                                      <input
+                                        type="radio"
+                                        id={`edit_q_${q.id}_choice_${cIdx}`}
+                                        name={`edit_correct_choice_${q.id}`}
+                                        checked={isCorrect}
+                                        onChange={() => setEditQAnswerIndex(cIdx)}
+                                        className="w-4 h-4 text-[var(--color-tangerine)] accent-[var(--color-tangerine)] cursor-pointer"
+                                      />
+                                      <span className="w-4 font-mono font-bold text-[var(--color-text-secondary)] text-center">
+                                        {String.fromCharCode(65 + cIdx)}
+                                      </span>
+                                    </label>
+
+                                    <input
+                                      type="text"
+                                      value={choiceObj.choice}
+                                      onChange={(e) => handleEditChoiceText(cIdx, e.target.value)}
+                                      placeholder={`Option ${String.fromCharCode(65 + cIdx)} text`}
+                                      className="flex-1 rounded-[var(--radius-sm)] border border-[#E5DFD3] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
+                                    />
+
+                                    {isCorrect && (
+                                      <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-[var(--color-tangerine)] shrink-0 bg-[var(--color-primary-subtle)] px-2 py-0.5 rounded-[var(--radius-sm)]">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Correct
+                                      </span>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveEditChoiceSlot(cIdx)}
+                                      disabled={editQChoices.length <= 2}
+                                      className="p-1 text-[var(--color-text-muted)] hover:text-red-500 rounded-[var(--radius-sm)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition shrink-0"
+                                      title="Delete choice"
+                                      aria-label={`Delete Option ${String.fromCharCode(65 + cIdx)}`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
+                                );
+                              })}
+                            </div>
+                          </div>
 
-                                  {isCorrect && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--color-tangerine)] shrink-0 bg-[var(--color-primary-subtle)] px-2 py-0.5 rounded-[var(--radius-sm)]">
-                                      <CheckCircle2 className="w-3 h-3" />
-                                      Correct Answer
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
+                          {/* Edit Question Action Buttons */}
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5DFD3]">
+                            <button
+                              type="button"
+                              onClick={cancelEditQuestion}
+                              disabled={isSavingThis}
+                              className="btn btn-outline inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] border border-[#D5CDBD] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer disabled:opacity-50"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Cancel</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveQuestionUpdate(q.id, idx)}
+                              disabled={isSavingThis}
+                              className="btn btn-primary inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] cursor-pointer disabled:opacity-50"
+                            >
+                              {isSavingThis ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 anim-spin" />
+                                  <span>Updating...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Save className="w-3.5 h-3.5" />
+                                  <span>Update Question</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <>
+                          {q.description && (
+                            <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--color-soft-cream)]/50 border border-[#E5DFD3] text-xs text-[var(--color-text-secondary)]">
+                              <span className="font-semibold block mb-0.5 text-[var(--color-text-primary)]">
+                                Description / Context:
+                              </span>
+                              {q.description}
+                            </div>
+                          )}
+
+                          {q.hint && (
+                            <div className="flex items-start gap-1.5 text-xs text-[var(--color-tangerine)] bg-[var(--color-soft-orange)]/20 p-2 rounded-[var(--radius-sm)] border border-[var(--color-tangerine)]/20">
+                              <HelpCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                              <span>
+                                <strong className="font-semibold">Hint:</strong> {q.hint}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Choices list */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-semibold text-[var(--color-text-primary)]">
+                                Choices (exam_q_choices) &amp; Verified Answer:
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => startEditQuestion(q, idx)}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-tangerine)] hover:underline cursor-pointer"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Edit Question</span>
+                              </button>
+                            </div>
+                            <div className="space-y-1.5">
+                              {choices.length === 0 ? (
+                                <span className="text-xs text-[var(--color-text-muted)] italic">
+                                  No choices registered for this question.
+                                </span>
+                              ) : (
+                                choices.map((choice, cIdx) => {
+                                  const isCorrect = choice.id === q.answer;
+                                  return (
+                                    <div
+                                      key={choice.id}
+                                      className={`flex items-center justify-between gap-2 p-2.5 rounded-[var(--radius-sm)] text-xs border ${
+                                        isCorrect
+                                          ? 'border-[var(--color-tangerine)] bg-[var(--color-soft-orange)]/25 font-semibold text-[var(--color-text-primary)]'
+                                          : 'border-[#E5DFD3] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-5 font-mono font-bold text-[var(--color-text-muted)]">
+                                          {String.fromCharCode(65 + cIdx)}.
+                                        </span>
+                                        <span>{choice.choice}</span>
+                                      </div>
+
+                                      {isCorrect && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--color-tangerine)] shrink-0 bg-[var(--color-primary-subtle)] px-2 py-0.5 rounded-[var(--radius-sm)]">
+                                          <CheckCircle2 className="w-3 h-3" />
+                                          Correct Answer
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

@@ -14,6 +14,7 @@ export interface Course {
   description?: string | null;
   duration: number; // duration in days
   mentor_id?: string | null;
+  courses_media_id?: string | null;
   preview_media_id?: string | null;
   course_learnings: string[];
   course_includes: string[];
@@ -70,16 +71,21 @@ export async function getCourses(searchQuery?: string): Promise<{ data: Course[]
       return { data: [], error: new Error(error.message) };
     }
 
-    const formattedCourses: Course[] = (data || []).map((c) => ({
-      ...c,
-      price: Number(c.price || 0),
-      selling_price: Number(c.selling_price || 0),
-      uk_price: Number(c.uk_price || 0),
-      uk_selling_price: Number(c.uk_selling_price || 0),
-      duration: Number(c.duration || 0),
-      course_learnings: Array.isArray(c.course_learnings) ? c.course_learnings : [],
-      course_includes: Array.isArray(c.course_includes) ? c.course_includes : [],
-    }));
+    const formattedCourses: Course[] = (data || []).map((c) => {
+      const mediaUrl = (c.courses_media_id as string | null) ?? (c.preview_media_id as string | null) ?? null;
+      return {
+        ...c,
+        price: Number(c.price || 0),
+        selling_price: Number(c.selling_price || 0),
+        uk_price: Number(c.uk_price || 0),
+        uk_selling_price: Number(c.uk_selling_price || 0),
+        duration: Number(c.duration || 0),
+        courses_media_id: mediaUrl,
+        preview_media_id: mediaUrl,
+        course_learnings: Array.isArray(c.course_learnings) ? c.course_learnings : [],
+        course_includes: Array.isArray(c.course_includes) ? c.course_includes : [],
+      };
+    });
 
     return { data: formattedCourses, error: null };
   } catch (err) {
@@ -112,6 +118,7 @@ export async function getCourseById(identifier: string): Promise<{ data: Course 
       return { data: null, error: new Error('Course not found') };
     }
 
+    const mediaUrl = (data.courses_media_id as string | null) ?? (data.preview_media_id as string | null) ?? null;
     const formatted: Course = {
       ...data,
       price: Number(data.price || 0),
@@ -119,6 +126,8 @@ export async function getCourseById(identifier: string): Promise<{ data: Course 
       uk_price: Number(data.uk_price || 0),
       uk_selling_price: Number(data.uk_selling_price || 0),
       duration: Number(data.duration || 0),
+      courses_media_id: mediaUrl,
+      preview_media_id: mediaUrl,
       course_learnings: Array.isArray(data.course_learnings) ? data.course_learnings : [],
       course_includes: Array.isArray(data.course_includes) ? data.course_includes : [],
     };
@@ -164,35 +173,107 @@ export async function generateNextCourseId(): Promise<string> {
 }
 
 /**
+ * Upload a course preview image to 'course_preview_images' (or fallback 'course_preview_image')
+ * Supabase storage bucket and return its public URL.
+ */
+export async function uploadCoursePreviewImage(
+  file: File
+): Promise<{ publicUrl: string | null; error: Error | null }> {
+  try {
+    const ext =
+      file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const safeBase =
+      file.name
+        .replace(/\.[^/.]+$/, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]/g, '-')
+        .slice(0, 40) || 'course-preview';
+    const filePath = `course-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBase}.${ext}`;
+
+    const tryUpload = async (bucket: string) => {
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type || undefined,
+        });
+
+      if (uploadError) {
+        return { publicUrl: null, error: uploadError };
+      }
+
+      const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      return { publicUrl: data.publicUrl, error: null };
+    };
+
+    const primary = await tryUpload('course_preview_images');
+    if (!primary.error) {
+      return { publicUrl: primary.publicUrl, error: null };
+    }
+
+    if (primary.error.message.toLowerCase().includes('not found')) {
+      const fallback = await tryUpload('course_preview_image');
+      if (!fallback.error) {
+        return { publicUrl: fallback.publicUrl, error: null };
+      }
+      return { publicUrl: null, error: new Error(fallback.error.message) };
+    }
+
+    return { publicUrl: null, error: new Error(primary.error.message) };
+  } catch (err) {
+    return {
+      publicUrl: null,
+      error: err instanceof Error ? err : new Error(String(err)),
+    };
+  }
+}
+
+/**
  * Insert a new course into Supabase.
+ * Stores the image link in courses.courses_media_id (falling back to preview_media_id if schema uses that column).
  */
 export async function createCourse(
   courseInput: Omit<Course, 'id' | 'created_at' | 'updated_at'>
 ): Promise<{ data: Course | null; error: Error | null }> {
   try {
+    const mediaValue = courseInput.courses_media_id ?? courseInput.preview_media_id ?? null;
+    const basePayload = {
+      course_id: courseInput.course_id,
+      title: courseInput.title,
+      sub_heading: courseInput.sub_heading || null,
+      description: courseInput.description || null,
+      price: Number(courseInput.price || 0),
+      selling_price: Number(courseInput.selling_price || 0),
+      uk_price: Number(courseInput.uk_price || 0),
+      uk_selling_price: Number(courseInput.uk_selling_price || 0),
+      duration: Number(courseInput.duration || 0),
+      mentor_id: courseInput.mentor_id || null,
+      course_learnings: courseInput.course_learnings || [],
+      course_includes: courseInput.course_includes || [],
+      status: courseInput.status || 'deactivated',
+      is_featured: Boolean(courseInput.is_featured),
+    };
+
     const { data, error } = await supabase
       .from('courses')
-      .insert([
-        {
-          course_id: courseInput.course_id,
-          title: courseInput.title,
-          sub_heading: courseInput.sub_heading || null,
-          description: courseInput.description || null,
-          price: Number(courseInput.price || 0),
-          selling_price: Number(courseInput.selling_price || 0),
-          uk_price: Number(courseInput.uk_price || 0),
-          uk_selling_price: Number(courseInput.uk_selling_price || 0),
-          duration: Number(courseInput.duration || 0),
-          mentor_id: courseInput.mentor_id || null,
-          preview_media_id: courseInput.preview_media_id || null,
-          course_learnings: courseInput.course_learnings || [],
-          course_includes: courseInput.course_includes || [],
-          status: courseInput.status || 'deactivated',
-          is_featured: Boolean(courseInput.is_featured),
-        },
-      ])
+      .insert([{ ...basePayload, courses_media_id: mediaValue }])
       .select()
       .single();
+
+    if (error && error.message.toLowerCase().includes('courses_media_id')) {
+      const retry = await supabase
+        .from('courses')
+        .insert([{ ...basePayload, preview_media_id: mediaValue }])
+        .select()
+        .single();
+
+      if (retry.error) {
+        return { data: null, error: new Error(retry.error.message) };
+      }
+
+      return { data: retry.data as Course, error: null };
+    }
 
     if (error) {
       return { data: null, error: new Error(error.message) };
@@ -224,11 +305,18 @@ export async function updateCourse(
     if (courseUpdates.uk_selling_price !== undefined) updatePayload.uk_selling_price = Number(courseUpdates.uk_selling_price);
     if (courseUpdates.duration !== undefined) updatePayload.duration = Number(courseUpdates.duration);
     if (courseUpdates.mentor_id !== undefined) updatePayload.mentor_id = courseUpdates.mentor_id || null;
-    if (courseUpdates.preview_media_id !== undefined) updatePayload.preview_media_id = courseUpdates.preview_media_id || null;
     if (courseUpdates.course_learnings !== undefined) updatePayload.course_learnings = courseUpdates.course_learnings;
     if (courseUpdates.course_includes !== undefined) updatePayload.course_includes = courseUpdates.course_includes;
     if (courseUpdates.status !== undefined) updatePayload.status = courseUpdates.status;
     if (courseUpdates.is_featured !== undefined) updatePayload.is_featured = Boolean(courseUpdates.is_featured);
+
+    const hasMediaUpdate =
+      courseUpdates.courses_media_id !== undefined || courseUpdates.preview_media_id !== undefined;
+    const mediaValue = courseUpdates.courses_media_id ?? courseUpdates.preview_media_id ?? null;
+
+    if (hasMediaUpdate) {
+      updatePayload.courses_media_id = mediaValue || null;
+    }
 
     const { data, error } = await supabase
       .from('courses')
@@ -237,11 +325,48 @@ export async function updateCourse(
       .select()
       .single();
 
+    if (error && hasMediaUpdate && error.message.toLowerCase().includes('courses_media_id')) {
+      const retryPayload = { ...updatePayload };
+      delete retryPayload.courses_media_id;
+      retryPayload.preview_media_id = mediaValue || null;
+
+      const retry = await supabase
+        .from('courses')
+        .update(retryPayload)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (retry.error) {
+        return { data: null, error: new Error(retry.error.message) };
+      }
+
+      const row = retry.data as Record<string, unknown>;
+      const resolvedUrl = (row.courses_media_id as string | null) ?? (row.preview_media_id as string | null) ?? null;
+      return {
+        data: {
+          ...(retry.data as Course),
+          courses_media_id: resolvedUrl,
+          preview_media_id: resolvedUrl,
+        },
+        error: null,
+      };
+    }
+
     if (error) {
       return { data: null, error: new Error(error.message) };
     }
 
-    return { data: data as Course, error: null };
+    const row = data as Record<string, unknown>;
+    const resolvedUrl = (row.courses_media_id as string | null) ?? (row.preview_media_id as string | null) ?? null;
+    return {
+      data: {
+        ...(data as Course),
+        courses_media_id: resolvedUrl,
+        preview_media_id: resolvedUrl,
+      },
+      error: null,
+    };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
   }
