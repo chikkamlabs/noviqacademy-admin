@@ -130,6 +130,60 @@ function AddExamContent() {
     });
   };
 
+  const handleUpdateDraftQuestionField = (
+    index: number,
+    field: 'question' | 'description' | 'hint',
+    value: string
+  ) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === index ? { ...q, [field]: value } : q))
+    );
+  };
+
+  const handleUpdateDraftChoice = (
+    qIndex: number,
+    cIndex: number,
+    value: string
+  ) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => {
+        if (i !== qIndex) return q;
+        const nextChoices = q.choices.map((c, ci) => (ci === cIndex ? value : c));
+        return { ...q, choices: nextChoices };
+      })
+    );
+  };
+
+  const handleAddDraftChoice = (qIndex: number) => {
+    setQuestions((prev) =>
+      prev.map((q, i) =>
+        i === qIndex ? { ...q, choices: [...q.choices, ''] } : q
+      )
+    );
+  };
+
+  const handleRemoveDraftChoice = (qIndex: number, cIndex: number) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => {
+        if (i !== qIndex || q.choices.length <= 2) return q;
+        const nextChoices = q.choices.filter((_, ci) => ci !== cIndex);
+        let nextAnswerIndex = q.answerIndex;
+        if (q.answerIndex === cIndex) {
+          nextAnswerIndex = 0;
+        } else if (q.answerIndex > cIndex) {
+          nextAnswerIndex = q.answerIndex - 1;
+        }
+        return { ...q, choices: nextChoices, answerIndex: nextAnswerIndex };
+      })
+    );
+  };
+
+  const handleUpdateDraftAnswerIndex = (qIndex: number, answerIndex: number) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === qIndex ? { ...q, answerIndex } : q))
+    );
+  };
+
   const handleSubmitExam = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -145,18 +199,51 @@ function AddExamContent() {
       return;
     }
 
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      if (!q.question.trim()) {
+        setErrorMsg(`Question ${i + 1} text cannot be empty.`);
+        setExpandedIndices((prev) => ({ ...prev, [i]: true }));
+        return;
+      }
+      const trimmedChoices = q.choices.map((c) => c.trim());
+      if (trimmedChoices.length < 2) {
+        setErrorMsg(`Question ${i + 1} must have at least 2 choices.`);
+        setExpandedIndices((prev) => ({ ...prev, [i]: true }));
+        return;
+      }
+      if (trimmedChoices.some((c) => !c)) {
+        setErrorMsg(`All choices in Question ${i + 1} must be filled in.`);
+        setExpandedIndices((prev) => ({ ...prev, [i]: true }));
+        return;
+      }
+      if (q.answerIndex < 0 || q.answerIndex >= trimmedChoices.length) {
+        setErrorMsg(`Please select a valid correct answer for Question ${i + 1}.`);
+        setExpandedIndices((prev) => ({ ...prev, [i]: true }));
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const finalTotalQ = typeof customTotalQ === 'number' && customTotalQ >= 0
         ? customTotalQ
         : questions.length;
 
+      const sanitizedQuestions: QuestionInput[] = questions.map((q) => ({
+        question: q.question.trim(),
+        description: q.description?.trim() || undefined,
+        hint: q.hint?.trim() || undefined,
+        choices: q.choices.map((c) => c.trim()),
+        answerIndex: q.answerIndex,
+      }));
+
       const { data, error } = await createCourseExam({
         course_id: selectedCourseId,
         title: trimmedTitle,
         description: description.trim() || undefined,
         total_q: finalTotalQ,
-        questions,
+        questions: sanitizedQuestions,
       });
 
       if (error || !data) {
@@ -323,7 +410,7 @@ function AddExamContent() {
                 <span>Questions ({questions.length})</span>
               </h2>
               <p className="text-xs text-[var(--color-text-muted)]">
-                Tap any question to expand and inspect its choices and correct answer.
+                Tap any question to expand and edit its text, description, hint, choices, or correct answer.
               </p>
             </div>
 
@@ -368,7 +455,7 @@ function AddExamContent() {
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs sm:text-sm font-semibold text-[var(--color-text-primary)] line-clamp-2">
-                            {q.question}
+                            {q.question || 'Untitled Question'}
                           </p>
                           <div className="flex items-center gap-2 mt-1 text-[11px] text-[var(--color-text-muted)]">
                             <span>{q.choices.length} choices</span>
@@ -403,57 +490,143 @@ function AddExamContent() {
                       </div>
                     </div>
 
-                    {/* Expanded details: Description, Hint, Choices & Answer */}
+                    {/* Expanded Editable Fields: Question, Description, Hint, Choices & Correct Answer */}
                     {isExpanded && (
-                      <div className="p-4 border-t border-[#E5DFD3] bg-[var(--color-surface)] space-y-3">
-                        {q.description && (
-                          <div className="p-2.5 rounded-[var(--radius-sm)] bg-[var(--color-soft-cream)]/50 border border-[#E5DFD3] text-xs text-[var(--color-text-secondary)]">
-                            <span className="font-semibold block mb-0.5 text-[var(--color-text-primary)]">
-                              Description / Context:
-                            </span>
-                            {q.description}
-                          </div>
-                        )}
-
-                        {q.hint && (
-                          <div className="flex items-start gap-1.5 text-xs text-[var(--color-tangerine)] bg-[var(--color-soft-orange)]/20 p-2 rounded-[var(--radius-sm)] border border-[var(--color-tangerine)]/20">
-                            <HelpCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                            <span>
-                              <strong className="font-semibold">Hint:</strong> {q.hint}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Choices list with answer indicator */}
+                      <div className="p-4 border-t border-[#E5DFD3] bg-[var(--color-surface)] space-y-3.5">
+                        {/* Question Text */}
                         <div>
-                          <span className="text-xs font-semibold text-[var(--color-text-primary)] block mb-1.5">
-                            Choices &amp; Correct Answer:
-                          </span>
-                          <div className="space-y-1.5">
+                          <label
+                            htmlFor={`draft_q_text_${idx}`}
+                            className="block text-xs font-semibold text-[var(--color-text-primary)] mb-1"
+                          >
+                            Question <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            id={`draft_q_text_${idx}`}
+                            rows={2}
+                            value={q.question}
+                            onChange={(e) =>
+                              handleUpdateDraftQuestionField(idx, 'question', e.target.value)
+                            }
+                            placeholder="Enter question text..."
+                            className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] p-2.5 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                          <label
+                            htmlFor={`draft_q_desc_${idx}`}
+                            className="block text-xs font-semibold text-[var(--color-text-primary)] mb-1"
+                          >
+                            Description <span className="text-[11px] font-normal text-[var(--color-text-muted)]">(optional)</span>
+                          </label>
+                          <textarea
+                            id={`draft_q_desc_${idx}`}
+                            rows={2}
+                            value={q.description || ''}
+                            onChange={(e) =>
+                              handleUpdateDraftQuestionField(idx, 'description', e.target.value)
+                            }
+                            placeholder="Provide additional context or code snippet..."
+                            className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] p-2.5 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
+                          />
+                        </div>
+
+                        {/* Hint */}
+                        <div>
+                          <label
+                            htmlFor={`draft_q_hint_${idx}`}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-primary)] mb-1"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5 text-[var(--color-tangerine)]" />
+                            <span>Hint</span>
+                            <span className="text-[11px] font-normal text-[var(--color-text-muted)]">(optional)</span>
+                          </label>
+                          <input
+                            id={`draft_q_hint_${idx}`}
+                            type="text"
+                            value={q.hint || ''}
+                            onChange={(e) =>
+                              handleUpdateDraftQuestionField(idx, 'hint', e.target.value)
+                            }
+                            placeholder="Provide a helpful hint..."
+                            className="w-full rounded-[var(--radius-md)] border border-[#D5CDBD] bg-[var(--color-surface)] px-3 py-2 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] focus:ring-1 focus:ring-[var(--color-tangerine)] outline-none"
+                          />
+                        </div>
+
+                        {/* Choices list with editable inputs, add/remove, and correct answer radio */}
+                        <div className="pt-2 border-t border-[#E5DFD3]">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-[var(--color-text-primary)]">
+                              Choices &amp; Correct Answer <span className="text-red-500">*</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleAddDraftChoice(idx)}
+                              className="btn btn-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[var(--color-tangerine)] border-dashed border-[var(--color-tangerine)]/50 hover:bg-[var(--color-soft-orange)]/30 rounded-[var(--radius-md)] cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Choice</span>
+                            </button>
+                          </div>
+                          <div className="space-y-2">
                             {q.choices.map((choice, cIdx) => {
                               const isCorrect = q.answerIndex === cIdx;
                               return (
                                 <div
                                   key={cIdx}
-                                  className={`flex items-center justify-between gap-2 p-2 rounded-[var(--radius-sm)] text-xs border ${
+                                  className={`flex items-center gap-2 p-2 rounded-[var(--radius-sm)] text-xs border transition-all ${
                                     isCorrect
-                                      ? 'border-[var(--color-tangerine)] bg-[var(--color-soft-orange)]/25 font-semibold text-[var(--color-text-primary)]'
-                                      : 'border-[#E5DFD3] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
+                                      ? 'border-[var(--color-tangerine)] bg-[var(--color-soft-orange)]/20'
+                                      : 'border-[#D5CDBD] bg-[var(--color-surface)]'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-5 font-mono font-bold text-[var(--color-text-muted)]">
-                                      {String.fromCharCode(65 + cIdx)}.
+                                  <label
+                                    htmlFor={`draft_q_${idx}_choice_${cIdx}`}
+                                    className="flex items-center gap-1.5 cursor-pointer shrink-0 select-none"
+                                    title="Select as correct answer"
+                                  >
+                                    <input
+                                      type="radio"
+                                      id={`draft_q_${idx}_choice_${cIdx}`}
+                                      name={`draft_correct_choice_${idx}`}
+                                      checked={isCorrect}
+                                      onChange={() => handleUpdateDraftAnswerIndex(idx, cIdx)}
+                                      className="w-4 h-4 text-[var(--color-tangerine)] accent-[var(--color-tangerine)] cursor-pointer"
+                                    />
+                                    <span className="w-4 font-mono font-bold text-[var(--color-text-secondary)] text-center">
+                                      {String.fromCharCode(65 + cIdx)}
                                     </span>
-                                    <span>{choice}</span>
-                                  </div>
+                                  </label>
+
+                                  <input
+                                    type="text"
+                                    value={choice}
+                                    onChange={(e) =>
+                                      handleUpdateDraftChoice(idx, cIdx, e.target.value)
+                                    }
+                                    placeholder={`Option ${String.fromCharCode(65 + cIdx)} text`}
+                                    className="flex-1 rounded-[var(--radius-sm)] border border-[#E5DFD3] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs sm:text-sm text-[var(--color-text-primary)] focus:border-[var(--color-tangerine)] outline-none"
+                                  />
 
                                   {isCorrect && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--color-tangerine)] shrink-0 bg-[var(--color-primary-subtle)] px-2 py-0.5 rounded-[var(--radius-sm)]">
+                                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-[var(--color-tangerine)] shrink-0 bg-[var(--color-primary-subtle)] px-2 py-0.5 rounded-[var(--radius-sm)]">
                                       <CheckCircle2 className="w-3 h-3" />
-                                      Correct Answer
+                                      Correct
                                     </span>
                                   )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveDraftChoice(idx, cIdx)}
+                                    disabled={q.choices.length <= 2}
+                                    className="p-1 text-[var(--color-text-muted)] hover:text-red-500 rounded-[var(--radius-sm)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition shrink-0"
+                                    title="Delete choice"
+                                    aria-label={`Delete Option ${String.fromCharCode(65 + cIdx)}`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                               );
                             })}

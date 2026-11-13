@@ -456,3 +456,146 @@ export async function deleteCourseExam(
     return { error: err instanceof Error ? err : new Error(String(err)) };
   }
 }
+
+export interface UpdateChoiceInput {
+  id?: string;
+  choice: string;
+}
+
+export interface UpdateQuestionInput {
+  question: string;
+  description?: string | null;
+  hint?: string | null;
+  choices: UpdateChoiceInput[];
+  answerIndex: number;
+}
+
+/**
+ * Update an existing question, its choices (update existing / insert new / remove deleted),
+ * and its correct answer choice reference.
+ */
+export async function updateQuestionInExam(
+  questionId: string,
+  input: UpdateQuestionInput
+): Promise<{ data: ExamQuestion | null; error: Error | null }> {
+  try {
+    const qText = input.question.trim();
+    if (!qText) {
+      return { data: null, error: new Error('Question text is required.') };
+    }
+
+    const cleanedChoices = input.choices.map((c) => ({
+      id: c.id,
+      choice: c.choice.trim(),
+    }));
+
+    if (cleanedChoices.some((c) => !c.choice)) {
+      return { data: null, error: new Error('All choice fields must be filled in.') };
+    }
+
+    if (cleanedChoices.length < 2) {
+      return { data: null, error: new Error('At least 2 choices are required.') };
+    }
+
+    if (input.answerIndex < 0 || input.answerIndex >= cleanedChoices.length) {
+      return { data: null, error: new Error('Please select a valid correct answer choice.') };
+    }
+
+    // 1. Fetch existing choices for this question
+    const { data: existingChoicesData, error: fetchChoicesError } = await supabase
+      .from('exam_q_choices')
+      .select('id')
+      .eq('question_id', questionId);
+
+    if (fetchChoicesError) {
+      return { data: null, error: new Error(fetchChoicesError.message) };
+    }
+
+    const existingIds = (existingChoicesData || []).map((c) => c.id as string);
+    const keptIds = new Set<string>();
+    const finalChoices: ExamChoice[] = [];
+    const now = new Date().toISOString();
+
+    // 2. Update kept choices and insert newly added choices in order
+    for (const c of cleanedChoices) {
+      if (c.id && existingIds.includes(c.id)) {
+        keptIds.add(c.id);
+        const { data: updatedChoice, error: updateChoiceErr } = await supabase
+          .from('exam_q_choices')
+          .update({ choice: c.choice, updated_at: now })
+          .eq('id', c.id)
+          .select()
+          .single();
+
+        if (updateChoiceErr || !updatedChoice) {
+          return {
+            data: null,
+            error: new Error(updateChoiceErr?.message || 'Failed to update choice.'),
+          };
+        }
+        finalChoices.push(updatedChoice as ExamChoice);
+      } else {
+        const { data: insertedChoice, error: insertChoiceErr } = await supabase
+          .from('exam_q_choices')
+          .insert({ question_id: questionId, choice: c.choice })
+          .select()
+          .single();
+
+        if (insertChoiceErr || !insertedChoice) {
+          return {
+            data: null,
+            error: new Error(insertChoiceErr?.message || 'Failed to add new choice.'),
+          };
+        }
+        finalChoices.push(insertedChoice as ExamChoice);
+      }
+    }
+
+    const correctChoiceId = finalChoices[input.answerIndex]?.id || null;
+
+    // 3. Update question fields and correct answer
+    const { data: updatedQuestion, error: updateQErr } = await supabase
+      .from('exam_questions')
+      .update({
+        question: qText,
+        description: input.description?.trim() || null,
+        hint: input.hint?.trim() || null,
+        answer: correctChoiceId,
+        updated_at: now,
+      })
+      .eq('id', questionId)
+      .select()
+      .single();
+
+    if (updateQErr || !updatedQuestion) {
+      return {
+        data: null,
+        error: new Error(updateQErr?.message || 'Failed to update question.'),
+      };
+    }
+
+    // 4. Delete choices that were removed
+    const removedIds = existingIds.filter((id) => !keptIds.has(id));
+    if (removedIds.length > 0) {
+      const { error: deleteChoiceErr } = await supabase
+        .from('exam_q_choices')
+        .delete()
+        .in('id', removedIds);
+
+      if (deleteChoiceErr) {
+        return { data: null, error: new Error(deleteChoiceErr.message) };
+      }
+    }
+
+    return {
+      data: {
+        ...(updatedQuestion as ExamQuestion),
+        choices: finalChoices,
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+

@@ -11,6 +11,7 @@ import {
   Users,
   ClipboardList,
   Tag,
+  Presentation,
   X,
 } from 'lucide-react';
 
@@ -27,6 +28,7 @@ const navItems = [
   { label: 'Learners', href: '/admin/learners/dashboard', icon: Users },
   { label: 'Registrations', href: '/admin/registrations/dashboard', icon: ClipboardList },
   { label: 'Coupons', href: '/admin/coupons/dashboard', icon: Tag },
+  { label: 'Workshops', href: '/admin/workshops', icon: Presentation },
 ];
 
 export default function AdminSidebar({
@@ -100,6 +102,7 @@ export default function AdminSidebar({
             const isCouponsNav = item.label === 'Coupons';
             const isLearnersNav = item.label === 'Learners';
             const isRegistrationsNav = item.label === 'Registrations';
+            const isWorkshopsNav = item.label === 'Workshops';
             const isActive = isCoursesNav
               ? pathname.startsWith('/admin/courses')
               : isMentorsNav
@@ -112,6 +115,8 @@ export default function AdminSidebar({
               ? pathname.startsWith('/admin/learners')
               : isRegistrationsNav
               ? pathname.startsWith('/admin/registrations')
+              : isWorkshopsNav
+              ? pathname.startsWith('/admin/workshops')
               : pathname === item.href;
 
             return (
